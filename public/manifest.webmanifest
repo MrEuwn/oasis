@@ -1,0 +1,14 @@
+{
+  "name": "OASIS — Open Academic Space and Interaction System",
+  "short_name": "OASIS",
+  "description": "See which coworking tables are free at UPNVJT, claim one, and share it.",
+  "start_url": "/radar",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#04101d",
+  "theme_color": "#071a2b",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "name": "oasis",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test:unit": "node scripts/unit.mjs",
+    "test:smoke": "node scripts/smoke.mjs",
+    "test:ui": "node scripts/ui-check.mjs",
+    "test:rehearsal": "node scripts/rehearsal.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.3",
+    "qrcode": "^1.5.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

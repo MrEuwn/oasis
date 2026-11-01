@@ -1,0 +1,109 @@
+# OASIS
+
+**Open Academic Space and Interaction System** — STACK 2026, Case 1: Smarter Campus and Learning.
+
+See it. Claim it. Share it. A zero-install PWA that shows which coworking tables are free at UPNVJT, lets a student claim one in seconds, and helps them find study partners who work the same way.
+
+This repository is the working MVP described by `public/docs/OASIS_PRD_v3.md`.
+
+## Run it
+
+```bash
+npm install
+npm run dev          # http://localhost:3000
+```
+
+Open the landing page and press **One-Click Demo Login**. No account, no Google, no API key needed. The demo campus is separate from the real campus rows and is labelled “Demo mode · simulated campus data”.
+
+Optional environment (`.env.local`):
+
+| Variable | Purpose |
+| --- | --- |
+| `GEMINI_API_KEY` | Enables the Gemini-backed Navigator. Without it the labelled offline parser answers. |
+| `GEMINI_MODEL` | Defaults to `gemini-2.0-flash`. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Enables campus Google sign-in. Without them the button is disabled with an honest note. |
+| `ALLOWED_EMAIL_DOMAINS` | Server-side allowlist, default `upnjatim.ac.id,student.upnjatim.ac.id`. |
+
+`.env.example` lists them. Secrets never reach the browser: the Gemini key is read in a route handler only.
+
+## Demo personas
+
+| Persona | Tier / points | Seeded state |
+| --- | --- | --- |
+| Demo Seeker | Shallows, 20 | no session |
+| Demo Host | Reef, 120 | published Networking Open Table, 2 seats open, table L3 |
+| Demo Guest | Shallows, 35 | no session |
+| Demo Navigator | Deep Blue, 180 | no session |
+
+Switching personas keeps the demo state; **Reset demo** (top bar, demo only) rebuilds it. `GET /api/cron` re-seeds the demo when it goes stale, expires unchecked bookings and closes finished sessions — point a scheduler at it hourly.
+
+## What works
+
+- Landing page, one-click demo login, demo banner, reset.
+- Radar: SVG campus map plus a room list; status derived only from bookings, check-ins, walk-ins and reports; icon + text + colour; “updated Ns ago”.
+- Booking: 30–120 minutes, Deep Work / Networking, Open Table with seat stepper, topic and note; four taps from Radar to a reservation; Undo toast.
+- Join: mode norms accepted in one tap, transactional seats (no overbooking), host's first name / programme / intake year only.
+- QR check-in, Scan & Sit walk-in, 15-minute auto-release, “Still here?” extend prompt, I'm leaving / host close / host removes a guest.
+- Points: append-only ledger, daily cap, tiers, priority tables at peak hours, three-miss perk pause, no deductions.
+- Navigator: structured intent from Gemini (when a key exists) or the deterministic parser; live step trace, one clarifying question, result card with Undo and scanner, per-user rate limit.
+- oauth: server-side Google sign-in with a server-side domain check.
+- PWA manifest, service worker app shell, offline banner, reduced-motion support, dark/light via `prefers-color-scheme`.
+
+## Verify it
+
+```bash
+npm run test:unit     # rule-level checks, no server: node scripts/unit.mjs
+npm run dev           # then, in another shell:
+npm run test:smoke    # 25 API journeys against localhost:3000
+npm run test:ui       # 37 browser checks in headless Chrome (UI flows)
+npm run test:rehearsal # PRD D9: 20 demo logins + 10 Navigator runs
+```
+
+Measured on the production build (`npm run build && npm start`), 1 Nov 2026, this machine:
+
+| Check | Result |
+| --- | --- |
+| `test:unit` | 14/14 |
+| `test:smoke` | 25/25 |
+| `test:ui` | 37/37, no console errors or hydration warnings |
+| `test:rehearsal` | 20/20 demo logins, 10/10 Navigator bookings, median 68 ms per two-prompt run (offline parser) |
+| Lighthouse (landing, mobile) | Performance 96 · Accessibility 100 · Best practices 100 |
+
+`scripts/smoke.mjs` exercises login, booking, joining, norms, overbooking, check-in, points, release, walk-in, two-report badge, Navigator clarification and Undo, QR rendering and reset. `scripts/ui-check.mjs` drives headless Chrome over CDP; set `CHROME_PATH` if Chrome is not in the default Windows location.
+
+## Architecture in one paragraph
+
+Next.js App Router on the server, React client screens, one JSON document store at `.data/db.json` guarded by a write lock, and all domain rules in `lib/domain.js` executed server-side. The browser never computes points, seats or permissions: it calls `/api/act` and re-reads `/api/state` every 2 seconds. That is the whole of it. `public/docs/ARCHITECTURE.md` has the diagram, invariants and the migration path to Supabase + Realtime.
+
+## Deviations from the PRD (honest list)
+
+| PRD | Shipped | Why |
+| --- | --- | --- |
+| Supabase Postgres + RLS + Edge Functions | JSON file store + route handlers with a write lock; `supabase/schema.sql` holds the target schema | No Supabase project or card available in this build; the rules and API shape are the same, and the schema is ready to move. |
+| Supabase Realtime | 2-second polling with an “updated Ns ago” label | Same user-visible behaviour at pilot scale without a second service. |
+| Gemini function calling loop (4 tools) | Gemini returns a validated structured intent; the same allowlisted server actions execute it | Fewer round trips, same guarantee: no booking without a validated intent, the model never writes SQL. |
+| Navigator tools named `search_tables`, `book_table`, … | Implemented as server functions of the same names in `lib/navigator.js` | Behaviour matches; only the transport differs. |
+| Hourly `pg_cron` jobs | `GET /api/cron` (any scheduler) + re-seed on demo login | Free-tier friendly; a GitHub Actions workflow is included. |
+| Leaderboard, Bahasa UI toggle, voice input, rotating QR, course recommendations | Not built | Could-have items in the PRD. |
+| Web Push notifications | In-app state only | iOS support needs an installed PWA; notifications were not on the critical path. |
+
+Known limitation carried over from the PRD: a static table QR can be photographed. Scans are bound to an active booking, one session per user, and the two-report rule covers the gap until rotating codes ship. Demo tables publish their QR token in the app so a judge can check in without a printed code; real campus tables never do.
+
+## Honesty notes
+
+- Metrics in `public/docs/OASIS_PRD_v3.md` are **targets**. No baseline, pilot or Lighthouse numbers are claimed here.
+- Every demo screen is labelled simulated data. Nothing seeded is presented as a real campus result.
+- Google OAuth is implemented but was not exercised in this build (no client credentials); demo login is the verified path.
+- AI assistance: the application was built with Hermes Agent; the Navigator calls the Gemini API at runtime, and the offline parser is deterministic and labelled in the UI.
+
+## Layout
+
+```
+app/            routes: landing, login, radar, navigator, scan, session, points, /api/*
+components/     client screens and the shared state provider
+lib/            store, seed, domain rules, auth, navigator, view models
+scripts/        unit.mjs, smoke.mjs, ui-check.mjs
+public/docs/    PRD v3 and ARCHITECTURE.md
+supabase/       target schema and RLS policies
+.data/          runtime database (git-ignored)
+```

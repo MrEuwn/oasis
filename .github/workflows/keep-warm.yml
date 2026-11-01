@@ -1,0 +1,13 @@
+name: oasis-keep-warm
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # hourly: keeps a free Supabase project awake and re-seeds the demo
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit the cron endpoint
+        run: curl -fsS "${{ vars.OASIS_URL }}/api/cron"
