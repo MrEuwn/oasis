@@ -73,7 +73,7 @@ kept, so val frames never leak into training.
 ## Metrics
 
 See [`RESULTS.md`](RESULTS.md). Headline: on the official val2017 split the
-fine-tune lifts chair mAP50 from **0.00 → 0.38** and table **0.00 → 0.56**, while
+fine-tune lifts chair mAP50 from **0.00 → 0.40** and table **0.00 → 0.57**, while
 person drops 0.86 → 0.78; on the demo clip, table-level occupancy agrees with
 hand labels **32/32** with a people-count MAE of 0.06. CPU-only: 1.2 s/frame.
 

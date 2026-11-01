@@ -9,14 +9,14 @@ epoch), AdamW lr0 0.002, 3 classes.
 
 | Class | Pretrained COCO mAP50 | Fine-tuned mAP50 | Δ |
 | --- | --- | --- | --- |
-| person | **0.857** | 0.778 | −0.079 |
-| chair | 0.000 | **0.383** | +0.383 |
-| dining table | 0.0002 | **0.559** | +0.559 |
-| all | 0.286 | **0.573** | +0.287 |
+| person | **0.857** | 0.781 | −0.076 |
+| chair | 0.000 | **0.403** | +0.403 |
+| dining table | 0.0002 | **0.573** | +0.573 |
+| all | 0.286 | **0.586** | +0.300 |
 
-Fine-tuned full metrics: P 0.633 · R 0.532 · mAP50 0.573 · mAP50-95 0.374.
-Per class (P / R / mAP50 / mAP50-95): person .774/.711/.778/.531 ·
-chair .453/.396/.383/.201 · table .672/.488/.559/.390.
+Fine-tuned full metrics at imgsz 512: P 0.583 · R 0.584 · mAP50 0.586 · mAP50-95 0.386.
+Per class (P / R / mAP50 / mAP50-95): person .718/.745/.781/.528 ·
+chair .434/.449/.403/.211 · table .596/.558/.573/.418.
 
 Read this honestly:
 
