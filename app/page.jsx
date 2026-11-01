@@ -45,8 +45,8 @@ export default function Landing() {
             it does all three.
           </p>
           <div className="cta-row">
-            <Link className="btn btn-primary" href="/login">Sign in with campus Google</Link>
-            <Link className="btn" href="/login">Try the demo — one click</Link>
+            <Link className="btn btn-primary" href="/login">Open the demo — one click</Link>
+            <a className="btn" href="/docs/OASIS_PRD_v3.md">Read the PRD</a>
           </div>
           <p className="hint">No install. No sensors. No card. Works on the phone already in your hand.</p>
         </section>
@@ -145,8 +145,8 @@ export default function Landing() {
         <section className="section" id="judges">
           <h2>For judges</h2>
           <p className="section-lede">
-            Enter in one tap, no password and no Google sign-in. Every demo screen is labelled “Demo mode · simulated
-            campus data”, and Reset demo restores the seed.
+            Enter in one tap, no password. Every demo screen is labelled “Demo mode · simulated campus data”, and Reset
+            demo restores the seed.
           </p>
           <div className="grid">
             <article className="card">

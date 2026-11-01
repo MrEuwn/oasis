@@ -14,13 +14,14 @@ function cleanIntent(raw, source) {
   return {
     room,
     anyRoom: Boolean(raw.anyRoom),
-    partySize: Math.min(Math.max(Number(raw.partySize) || 1, 1), 12),
+    partySize: Math.min(Math.max(Number(raw.partySize) || 0, 0), 12),
     duration: Math.min(Math.max(Number(raw.duration) || 60, 30), 120),
     mode,
     topic: raw.topic ? String(raw.topic).slice(0, 40) : null,
     startAt: raw.startAt ? new Date(raw.startAt).toISOString() : null,
     openTable: raw.openTable === null || raw.openTable === undefined ? null : Boolean(raw.openTable),
     ambiguous: Boolean(raw.ambiguous),
+    offTopic: Number(raw.partySize) === 0,
     source: source || 'offline parser',
   };
 }

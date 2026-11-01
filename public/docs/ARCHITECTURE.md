@@ -8,7 +8,7 @@ Phone / judge laptop
   │  every 2 s: GET /api/state   ← the Radar is a pure view of this payload
   ▼
 Next.js route handlers (server only)
-  ├─ /api/auth/demo · /api/auth/google · callback      session cookie (HMAC)
+  ├─ /api/auth/demo · /api/auth/logout             session cookie (HMAC)
   ├─ /api/act                                          all mutations, one allowlist
   ├─ /api/navigator ──► Gemini API (structured intent) ──► same server actions
   ├─ /api/state                                        runs the jobs, then renders

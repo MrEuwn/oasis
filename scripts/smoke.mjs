@@ -122,6 +122,9 @@ check('result card carries check-in deadline and undo', Boolean(bookedByAi.data.
 const undo = await nav.act('cancel', { bookingId: bookedByAi.data.result.booking_id });
 check('undo cancels for free', undo.data.ok);
 
+const offTopic = await nav.req('/api/navigator', 'POST', { prompt: 'What is the weather like tomorrow?' });
+check('navigator declines off-topic requests', !offTopic.data.ok && /only help/i.test(offTopic.data.error || ''), offTopic.data.error);
+
 const qr = await seeker.req(`/api/qr/${free.id}`);
 check('table QR renders as SVG', qr.status === 200 && String(qr.data).startsWith('<svg'));
 

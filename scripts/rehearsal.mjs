@@ -36,17 +36,29 @@ for (const persona of personas) {
 
 const latencies = [];
 let booked = 0;
+
+async function nav(client, body) {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const res = await client.req('/api/navigator', 'POST', body);
+    res.retried = attempt > 0;
+    if (res.status !== 429) return res;
+    const wait = Number((res.data.error || '').match(/(\d+)s/)?.[1] || 10);
+    await new Promise((r) => setTimeout(r, (wait + 1) * 1000));
+  }
+  return { status: 429, data: { error: 'rate limited' } };
+}
+
 for (let i = 0; i < 10; i += 1) {
   const client = clients[i % clients.length];
   await client.act('reset_demo');
   const started = Date.now();
-  const first = await client.req('/api/navigator', 'POST', { prompt: 'Find a quiet table for 4 people in the library' });
+  const first = await nav(client, { prompt: 'Find a quiet table for 4 people in the library' });
   const option = first.data.clarification?.options?.find((o) => /Already/i.test(o.label));
-  const second = await client.req('/api/navigator', 'POST', { intent: option?.value, source: first.data.source, prompt: option?.label || '' });
+  const second = await nav(client, { intent: option?.value, source: first.data.source, prompt: option?.label || '' });
   const took = Date.now() - started;
   if (second.data.ok && second.data.result?.space) {
     booked += 1;
-    latencies.push(took);
+    if (!first.retried && !second.retried) latencies.push(took);
     await client.act('cancel', { bookingId: second.data.result.booking_id });
   } else {
     console.error(`run ${i + 1} failed: ${second.data.error || 'no result'}`);

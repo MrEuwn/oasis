@@ -1,23 +1,13 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import DemoLogin from '@/components/DemoLogin';
-import { currentUser, googleConfigured } from '@/lib/auth.js';
-
-const ERRORS = {
-  domain: 'That email domain is not on the campus allowlist. Use your UPNVJT student account, or try the demo.',
-  state: 'The sign-in attempt expired. Please try again.',
-  google: 'Google sign-in could not be completed. Try again, or use the demo.',
-};
+import { currentUser } from '@/lib/auth.js';
 
 export const dynamic = 'force-dynamic';
 
-export default async function LoginPage({ searchParams }) {
-  const params = await searchParams;
+export default async function LoginPage() {
   const user = await currentUser();
   if (user) redirect('/radar');
-  const configured = googleConfigured();
-  const unconfigured = params?.google === 'unconfigured' || (!configured && params?.google);
-  const error = params?.error ? ERRORS[params.error] : null;
 
   return (
     <div className="landing">
@@ -26,12 +16,10 @@ export default async function LoginPage({ searchParams }) {
           <span className="brand-mark" aria-hidden="true">◉</span> OASIS
         </Link>
 
-        <h1 style={{ fontSize: '1.8rem', margin: '24px 0 8px' }}>Sign in</h1>
+        <h1 style={{ fontSize: '1.8rem', margin: '24px 0 8px' }}>Enter OASIS</h1>
         <p className="hint" style={{ marginBottom: 24 }}>
-          Students of UPN Veteran Jawa Timur. Judges: use the demo, no account needed.
+          One tap, no password. Pick the persona you want to demonstrate.
         </p>
-
-        {error && <p className="error" style={{ marginBottom: 14 }}>{error}</p>}
 
         <div className="card" style={{ marginBottom: 16 }}>
           <h3>One-Click Demo Login</h3>
@@ -40,22 +28,11 @@ export default async function LoginPage({ searchParams }) {
         </div>
 
         <div className="card">
-          <h3>Campus Google account</h3>
-          {configured ? (
-            <a className="btn btn-block" href="/api/auth/google" style={{ marginTop: 10 }}>
-              Sign in with campus Google
-            </a>
-          ) : (
-            <>
-              <p style={{ marginBottom: 10 }}>
-                Google OAuth is not configured on this deployment. Set <code>GOOGLE_CLIENT_ID</code> and{' '}
-                <code>GOOGLE_CLIENT_SECRET</code> to enable it; the domain allowlist is enforced server-side.
-              </p>
-              <button className="btn btn-block" disabled>Sign in with campus Google</button>
-            </>
-          )}
-          <p className="hint" style={{ marginTop: 10 }}>
-            Only institutional domains are accepted, checked on the server — not in the browser.
+          <h3>Campus accounts</h3>
+          <p>
+            This build runs on demo accounts only, by team decision for the STACK submission. The PRD keeps
+            institutional Google sign-in as the production path; the server-side domain allowlist would live in
+            <code>lib/auth.js</code>.
           </p>
         </div>
 
