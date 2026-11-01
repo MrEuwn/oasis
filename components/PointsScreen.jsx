@@ -1,6 +1,7 @@
 'use client';
 
 import { useApp } from './AppState';
+import { IconCheck, IconLock } from './Icons';
 
 export default function PointsScreen() {
   const { me, config, state } = useApp();
@@ -13,69 +14,100 @@ export default function PointsScreen() {
 
   return (
     <>
+      <div className="screen-head">
+        <div>
+          <h1>Points</h1>
+          <span className="mono">balance, perks & ledger</span>
+        </div>
+        {me.streak > 0 && <span className="tier-chip">{me.streak} streak</span>}
+      </div>
+
       <div className="card">
-        <div className="ring" style={{ '--p': `${Math.max(3, Math.min(100, pct))}%` }}>
-          <div className="ring-content">
-            <strong>{me.points}</strong>
-            <span>OASIS Points</span>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+          <div>
+            <span className="mono">Balance</span>
+            <div style={{ fontFamily: 'var(--mono)', fontSize: '2.75rem', lineHeight: 1, letterSpacing: '-0.04em', marginTop: 8 }}>
+              {me.points}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <span className="mono">Tier</span>
+            <div style={{ fontSize: '1rem', fontWeight: 600, marginTop: 6 }}>{me.tier}</div>
+            <span className="hint">{next ? `${next.at - me.points} to ${next.name}` : 'Top tier'}</span>
           </div>
         </div>
-        <div className="row between" style={{ marginTop: 8 }}>
-          <strong>{me.tier}</strong>
-          <span className="hint">
-            {next ? `${next.at - me.points} to ${next.name}` : 'Top tier reached'}
+        <div className="tier-progress" role="progressbar" aria-valuenow={Math.max(0, Math.min(100, pct))} aria-valuemin={0} aria-valuemax={100}>
+          <i style={{ width: `${Math.max(3, Math.min(100, pct))}%` }} />
+        </div>
+        {me.paused && (
+          <p className="hint" style={{ marginTop: 10 }}>
+            Priority perks paused until {new Date(me.paused_until).toLocaleDateString('en-GB', { timeZone: 'Asia/Jakarta' })}. No points were deducted.
+          </p>
+        )}
+      </div>
+
+      <div className="card">
+        <h3>Perks</h3>
+        <div className="perk-row on">
+          <span>Book a table now</span>
+          <span className="state"><IconCheck width={12} height={12} /> Unlocked</span>
+        </div>
+        <div className={`perk-row ${me.priority ? 'on' : ''}`}>
+          <span>Priority tables at peak hours</span>
+          <span className="state">
+            {me.priority ? <><IconCheck width={12} height={12} /> Unlocked</> : <><IconLock width={12} height={12} /> Reef · 50 pts</>}
           </span>
         </div>
-        <div className="kv"><span>Check-in streak</span><span>{me.streak} in a row</span></div>
-        <div className="kv"><span>Advance booking</span><span>{me.advance} minutes</span></div>
-        <div className="kv"><span>Priority tables</span><span>{me.priority ? 'Unlocked at peak hours' : 'Reef tier and above'}</span></div>
-        {me.paused && <p className="hint" style={{ marginTop: 10 }}>Priority perks paused until {new Date(me.paused_until).toLocaleDateString('en-GB', { timeZone: 'Asia/Jakarta' })}. No points were deducted.</p>}
+        <div className={`perk-row ${me.advance > 0 ? 'on' : ''}`}>
+          <span>Book ahead · {me.advance > 0 ? `${me.advance} min` : '60 min at Reef'}</span>
+          <span className="state">
+            {me.advance > 0 ? <><IconCheck width={12} height={12} /> Unlocked</> : <><IconLock width={12} height={12} /> Reef · 50 pts</>}
+          </span>
+        </div>
+        <div className={`perk-row ${me.tier === 'Deep Blue' ? 'on' : ''}`}>
+          <span>Extend a session when nobody waits</span>
+          <span className="state">
+            {me.tier === 'Deep Blue' ? <><IconCheck width={12} height={12} /> Unlocked</> : <><IconLock width={12} height={12} /> Deep Blue · 150 pts</>}
+          </span>
+        </div>
       </div>
 
       <div className="card">
         <h3>How points are earned</h3>
-        <ul className="list-plain">
-          <li><span>Check in on time</span><span>+{config?.points?.CHECKIN ?? 10}</span></li>
-          <li><span>Complete a session</span><span>+{config?.points?.COMPLETE ?? 5}</span></li>
-          <li><span>Host a successful Open Table</span><span>+{config?.points?.HOST_SUCCESS ?? 15}</span></li>
-          <li><span>Good Neighbour (leave 10+ min early)</span><span>+{config?.points?.GOOD_NEIGHBOUR ?? 2}</span></li>
-          <li><span>Confirm the mode was respected</span><span>+{config?.points?.MODE_RESPECTED ?? 3}</span></li>
-        </ul>
+        <div className="ledger">
+          <div className="ledger-row"><span>Check in on time</span><span className="pts">+{config?.points?.CHECKIN ?? 10}</span></div>
+          <div className="ledger-row"><span>Complete a session</span><span className="pts">+{config?.points?.COMPLETE ?? 5}</span></div>
+          <div className="ledger-row"><span>Host a successful open table</span><span className="pts">+{config?.points?.HOST_SUCCESS ?? 15}</span></div>
+          <div className="ledger-row"><span>Leave 10+ minutes early</span><span className="pts">+{config?.points?.GOOD_NEIGHBOUR ?? 2}</span></div>
+          <div className="ledger-row"><span>Confirm the mode was respected</span><span className="pts">+{config?.points?.MODE_RESPECTED ?? 3}</span></div>
+        </div>
         <p className="hint" style={{ marginTop: 10 }}>
-          Daily cap {config?.daily_cap ?? 50} points. Points are never deducted; a missed check-in simply earns nothing.
+          Daily cap {config?.daily_cap ?? 50}. Nothing is ever deducted; a missed check-in simply earns nothing.
         </p>
       </div>
 
-      <div className="card">
-        <h3>Tiers and perks</h3>
-        <ul className="list-plain">
-          {tiers.map((t) => (
-            <li key={t.name}>
-              <span>{t.name} <span className="hint">({t.min}+)</span></span>
-              <span className="hint">
-                {t.name === 'Shallows' ? 'Standard tables' : t.name === 'Reef' ? 'Priority + 60 min ahead' : 'Priority + 120 min ahead + extend'}
+      <div className="list">
+        <div className="list-head">
+          <span className="mono">Recent activity</span>
+          <span className="mono">{state.points_history.length}</span>
+        </div>
+        {state.points_history.length === 0 && <p className="hint" style={{ padding: '14px 0' }}>Nothing yet. Check in to a table to start.</p>}
+        {state.points_history.map((e) => (
+          <div className="ledger-row" key={e.id}>
+            <span>
+              {e.label}
+              <span className="when">
+                {new Date(e.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Jakarta' })}
               </span>
-            </li>
-          ))}
-        </ul>
+            </span>
+            <span className="pts">+{e.points}</span>
+          </div>
+        ))}
       </div>
 
-      <div className="card">
-        <h3>Recent events</h3>
-        {state.points_history.length === 0 && <p>Nothing yet. Check in to a table to start.</p>}
-        <ul className="list-plain">
-          {state.points_history.map((e) => (
-            <li key={e.id}>
-              <span>{e.label}</span>
-              <span>+{e.points} · {new Date(e.at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', timeZone: 'Asia/Jakarta' })}</span>
-            </li>
-          ))}
-        </ul>
-        <p className="hint" style={{ marginTop: 10 }}>
-          The ledger is append-only and every award happens server-side. Host points require a different guest to show
-          up; the same pair earns at most twice a day.
-        </p>
-      </div>
+      <p className="hint">
+        The ledger is append-only and every award happens server-side. Host points need a different guest to show up.
+      </p>
     </>
   );
 }

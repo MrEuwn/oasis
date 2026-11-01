@@ -2,91 +2,128 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { useApp, useMounted } from './AppState';
+import {
+  IconCompass,
+  IconLogout,
+  IconMore,
+  IconRadar,
+  IconRefresh,
+  IconScan,
+  IconStar,
+  IconTimer,
+  Logo,
+} from './Icons';
 
 const NAV = [
-  { href: '/radar', label: 'Radar', glyph: '◎' },
-  { href: '/navigator', label: 'Navigator', glyph: '✳' },
-  { href: '/scan', label: 'Scan', glyph: '⌗', scan: true },
-  { href: '/session', label: 'Session', glyph: '◷' },
-  { href: '/points', label: 'Points', glyph: '★' },
+  { href: '/radar', label: 'Radar', Icon: IconRadar },
+  { href: '/navigator', label: 'Navigator', Icon: IconCompass },
+  { href: '/scan', label: 'Scan', Icon: IconScan, scan: true },
+  { href: '/session', label: 'Session', Icon: IconTimer },
+  { href: '/points', label: 'Points', Icon: IconStar },
 ];
 
-const TITLES = {
-  '/radar': 'Radar',
-  '/navigator': 'OASIS Navigator',
-  '/scan': 'Scan',
-  '/session': 'Session',
-  '/points': 'OASIS Points',
-};
-
 export default function Shell({ children }) {
-  const pathname = usePathname();
+  const { me, toast, dismissToast, online, lastSync, act } = useApp();
+  const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { me, toast, dismissToast, online, lastSync, state } = useApp();
+  const pathname = usePathname();
   const mounted = useMounted();
-  const secondsAgo = Math.max(0, Math.round((Date.now() - lastSync) / 1000));
+  const seconds = Math.max(0, Math.round((Date.now() - lastSync) / 1000));
 
-  async function logout() {
+  useEffect(() => setOpen(false), [pathname]);
+
+  async function resetDemo() {
+    setOpen(false);
+    const res = await act('reset_demo');
+    if (res.ok) window.location.reload();
+  }
+
+  async function signOut() {
+    setOpen(false);
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/');
   }
 
   return (
-    <div className="app-shell">
-      {me?.is_demo && <div className="demo-banner">Demo mode · simulated campus data</div>}
-      {!online && <div className="demo-banner" style={{ color: 'var(--red)' }}>Offline: showing last known state</div>}
-
-      <header className="topbar">
-        <div>
-          <h1>{TITLES[pathname] || 'OASIS'}</h1>
-          <span className="who">
-            {me?.first_name} · {me?.tier} · {me?.points} pts · updated {mounted ? `${secondsAgo}s ago` : 'just now'}
-          </span>
+    <div className="shell">
+      {me?.is_demo && <div className="tape">Demo mode · simulated campus data</div>}
+      {!online && (
+        <div className="tape" style={{ color: 'var(--red)', background: 'rgba(255,111,97,.08)', borderColor: 'rgba(255,111,97,.25)' }}>
+          Offline · showing last known state
         </div>
-        <div className="row" style={{ gap: 6 }}>
-          {me?.is_demo && (
-            <button className="btn btn-sm btn-ghost" onClick={async () => {
-              const res = await fetch('/api/act', {
-                method: 'POST',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ action: 'reset_demo' }),
-              });
-              const data = await res.json();
-              if (data.state) window.location.reload();
-            }}>
-              Reset demo
-            </button>
-          )}
-          <button className="btn btn-sm btn-ghost" onClick={logout} aria-label="Sign out">↪</button>
+      )}
+
+      <header className="hud">
+        <Link href="/radar" className="hud-brand" aria-label="OASIS radar">
+          <Logo size={24} />
+          <span className="mono">OASIS</span>
+        </Link>
+        <div className="hud-meta">
+          <span className="live" title="Seconds since the last sync">
+            <i aria-hidden="true" />
+            {mounted ? (seconds < 2 ? 'live' : `live · ${seconds}s`) : 'live'}
+          </span>
+          <span className="tier-chip" title="Your tier and points balance">
+            {me?.tier} · {me?.points} pts
+          </span>
+          <button className="icon-btn" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+            <IconMore width={18} height={18} />
+          </button>
         </div>
       </header>
 
+      {open && (
+        <div className="menu" role="menu">
+          {me?.is_demo && (
+            <button role="menuitem" onClick={resetDemo}>
+              <IconRefresh width={17} height={17} /> Reset demo
+            </button>
+          )}
+          <button role="menuitem" onClick={signOut}>
+            <IconLogout width={17} height={17} /> Sign out
+          </button>
+        </div>
+      )}
+
       <main className="screen">{children}</main>
+
+      <nav className="nav" aria-label="Primary">
+        {NAV.map(({ href, label, Icon, scan }) => (
+          <Link
+            key={href}
+            href={href}
+            className={scan ? 'scan-tab' : undefined}
+            aria-current={pathname === href ? 'page' : undefined}
+          >
+            {scan ? (
+              <span className="scan-fab">
+                <Icon />
+              </span>
+            ) : (
+              <Icon />
+            )}
+            <span>{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {toast && (
         <div className="toast" role="status">
           <span>{toast.text}</span>
           {toast.undo && (
-            <button onClick={() => { toast.undo(); dismissToast(); }}>Undo</button>
+            <button
+              onClick={async () => {
+                await toast.undo();
+                dismissToast();
+              }}
+            >
+              Undo
+            </button>
           )}
         </div>
       )}
-
-      <nav className="nav" aria-label="Primary">
-        {NAV.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={item.scan ? 'scan' : undefined}
-            aria-current={pathname === item.href ? 'page' : undefined}
-          >
-            <span className="glyph" aria-hidden="true">{item.glyph}</span>
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      {state?.config?.peak_now && <span className="sr-only">Peak hours now</span>}
     </div>
   );
 }

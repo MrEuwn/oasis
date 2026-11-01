@@ -115,7 +115,7 @@ check('two reports flag the table as busy', report1.data.ok && report2.data.flag
 
 const clarify = await nav.req('/api/navigator', 'POST', { prompt: 'Find a quiet table for 4 people in the library' });
 check('navigator asks one clarifying question', Boolean(clarify.data.clarification?.options?.length), JSON.stringify(clarify.data.error));
-const option = clarify.data.clarification.options.find((o) => /Already/i.test(o.label));
+const option = clarify.data.clarification.options.find((o) => /We're all|Already/i.test(o.label));
 const bookedByAi = await nav.req('/api/navigator', 'POST', { intent: option.value, source: clarify.data.source, prompt: option.label });
 check('navigator books after the answer', bookedByAi.data.ok && /Library/.test(bookedByAi.data.result?.space || ''), JSON.stringify(bookedByAi.data));
 check('result card carries check-in deadline and undo', Boolean(bookedByAi.data.result?.checkin_deadline));

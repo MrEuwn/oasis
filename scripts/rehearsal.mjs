@@ -53,7 +53,7 @@ for (let i = 0; i < 10; i += 1) {
   await client.act('reset_demo');
   const started = Date.now();
   const first = await nav(client, { prompt: 'Find a quiet table for 4 people in the library' });
-  const option = first.data.clarification?.options?.find((o) => /Already/i.test(o.label));
+  const option = first.data.clarification?.options?.find((o) => /We're all|Already/i.test(o.label));
   const second = await nav(client, { intent: option?.value, source: first.data.source, prompt: option?.label || '' });
   const took = Date.now() - started;
   if (second.data.ok && second.data.result?.space) {

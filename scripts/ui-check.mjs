@@ -115,28 +115,33 @@ try {
   await send('Page.enable');
 
   await goto(BASE);
-  check('landing renders hero', (await evalJs('document.body.innerText')).includes('A calmer way to find a seat'));
-  check('landing shows the value line', (await evalJs('document.body.innerText')).includes('See it. Claim it. Share it.'));
-  check('landing marks sample data', (await evalJs('document.body.innerText')).includes('Sample data'));
+  check('landing renders hero', (await evalJs('document.body.innerText')).includes('Find a seat.'));
+  check('landing shows the value line', /see it\. claim it\. share it\./i.test(await evalJs('document.body.innerText')));
+  check('landing marks sample data', /sample data/i.test(await evalJs('document.body.innerText')));
 
-  check('one-click demo button exists', await clickText('button', 'One-Click Demo Login'));
-  const onRadar = await waitFor('location.pathname === "/radar" && document.querySelectorAll(".room-row").length >= 2', 20000);
+  check('demo button exists', await clickText('button', 'Enter as Demo Seeker'));
+  const onRadar = await waitFor('location.pathname === "/radar" && document.querySelectorAll(".list .row").length >= 2', 20000);
   check('demo login lands on the Radar', onRadar, await evalJs('location.pathname + " " + document.body.innerText.slice(0,120)'));
 
-  const radarText = await evalJs('document.body.innerText');
-  check('demo banner is visible', radarText.includes('Demo mode · simulated campus data'));
-  check('radar shows both rooms', radarText.includes('Library') && radarText.includes('Student Centre'));
-  check('status labels are textual, not colour only', radarText.includes('Empty') && radarText.includes('Open Table'));
-  check('updated label is present', /updated \d+s ago/.test(radarText));
+  // Start from a known demo state so repeated runs behave the same.
+  await evalJs(`fetch('/api/act', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reset_demo' }) })`);
+  await goto(`${BASE}/radar`);
+  await sleep(600);
 
-  await clickText('.room-row', 'Library');
-  await waitFor('!!document.querySelector(".table-row")');
+  const radarText = await evalJs('document.body.innerText');
+  check('demo banner is visible', /demo mode · simulated campus data/i.test(radarText));
+  check('radar shows both rooms', radarText.includes('Library') && radarText.includes('Student Centre'));
+  check('status labels are textual, not colour only', /empty/i.test(radarText) && /shared/i.test(radarText));
+  check('updated label is present', /live/i.test(radarText));
+
+  await clickText('.list .row', 'Library');
+  await waitFor('!!document.querySelector(".sheet .row")');
   const sheetText = await evalJs('document.querySelector(".sheet")?.innerText || ""');
   check('room sheet lists tables and seats', sheetText.includes('Table L1') && sheetText.includes('seats'));
-  check('room sheet exposes filters', sheetText.includes('Free now') && sheetText.includes('Open tables'));
+  check('room sheet exposes filters', sheetText.includes('Free') && sheetText.includes('Open'));
 
   const openRow = await evalJs(`(() => {
-    const rows = [...document.querySelectorAll('.table-row')];
+    const rows = [...document.querySelectorAll('.sheet .row')];
     const row = rows.find((r) => r.textContent.includes('Empty'));
     if (!row) return false;
     row.click(); return true;
@@ -147,30 +152,30 @@ try {
   check('table detail offers Book now', await clickText('button', 'Book now'));
   await waitFor('document.body.innerText.includes("Book this table")');
   const bookingSheet = await evalJs('document.querySelector(".sheet").innerText');
-  check('booking sheet pre-fills duration and mode', bookingSheet.includes('60 min') && bookingSheet.includes('Deep Work'));
+  check('booking sheet pre-fills duration and mode', bookingSheet.includes('60m') && bookingSheet.includes('Deep Work'));
 
-  check('Open Table toggle works', await clickText('.toggle', 'Open Table'));
+  check('Open Table toggle works', await clickText('.switch-row', 'Open table'));
   await waitFor('document.body.innerText.toUpperCase().includes("SEATS TO OPEN")');
   const afterToggle = await evalJs('document.querySelector(".sheet").innerText');
   check('seat stepper appears after toggling', /SEATS TO OPEN/i.test(afterToggle));
 
-  check('publish button is offered', await clickText('button', 'Publish Open Table'));
-  const published = await waitFor('document.querySelector(".toast")?.innerText.includes("Open Table published")', 10000);
+  check('publish button is offered', await clickText('button', 'Publish ·'));
+  const published = await waitFor('document.querySelector(".toast")?.innerText.toLowerCase().includes("open table published")', 10000);
   check('publishing shows a toast with Undo', published && (await evalJs('document.querySelector(".toast").innerText.includes("Undo")')));
 
   await goto(`${BASE}/session`);
   const sessionText = await evalJs('document.body.innerText');
-  check('session screen shows the countdown', /to check in|until the session ends/.test(sessionText));
+  check('session screen shows the countdown', /to check in|until the session ends/i.test(sessionText));
   check('session screen offers check-in', sessionText.includes('Check in'));
   check('session screen shows the table QR', (await evalJs('!!document.querySelector(".qr-box img")')));
 
   check('go to scanner', await clickText('a', 'Check in'));
   await waitFor('location.pathname === "/scan"', 15000);
-  await waitFor('document.body.innerText.includes("Check in here")', 15000);
+  await waitFor('document.body.innerText.includes("Check in to my booking")', 15000);
   check('scanner knows the table', (await evalJs('document.body.innerText')).includes('Library'));
   // The check-in button is disabled until state settles with the demo token.
-  await waitFor('[...document.querySelectorAll("button")].some((b) => b.textContent.includes("Check in here") && !b.disabled)', 10000);
-  check('demo scanner is armed with the table token', await clickText('button', 'Check in here'));
+  await waitFor('[...document.querySelectorAll("button")].some((b) => b.textContent.includes("Check in to my booking") && !b.disabled)', 10000);
+  check('demo scanner is armed with the table token', await clickText('button', 'Check in to my booking'));
   const checkedIn = await waitFor('document.querySelector(".toast")?.innerText.includes("Checked in")', 10000);
   check('check-in shows the points toast', checkedIn);
 
@@ -181,20 +186,20 @@ try {
 
   await goto(`${BASE}/points`);
   const pointsText = await evalJs('document.body.innerText');
-  check('points screen shows the balance', /37|OASIS Points/.test(pointsText));
-  check('points screen lists tiers', pointsText.includes('Shallows') && pointsText.includes('Reef'));
+  check('points screen shows the balance', /37|Balance/i.test(pointsText));
+  check('points screen lists tiers', /shallows/i.test(pointsText) && /reef/i.test(pointsText));
 
   await goto(`${BASE}/navigator`);
   check('navigator shows suggestion chips', (await evalJs('document.body.innerText')).includes('Find a quiet table for 4 people in the library'));
   check('send a navigator prompt', await clickText('.chip', 'Find a quiet table for 4 people in the library'));
   const clarified = await waitFor('document.body.innerText.includes("Already") && document.body.innerText.includes("partner")', 20000);
   const navText = await evalJs('document.body.innerText');
-  check('navigator shows the step trace', navText.includes('Understanding') && navText.includes('Searching tables'));
+  check('navigator shows the step trace', navText.includes('Understanding') && navText.includes('Party status'));
   check('navigator asks a clarifying question', clarified, navText.slice(0, 300));
 
   if (clarified) {
-    check('answer the clarifying question', await clickText('.chip', 'Already'));
-    const bookedCard = await waitFor('document.body.innerText.includes("Check in by") || document.body.innerText.includes("No free table")', 20000);
+    check('answer the clarifying question', await clickText('.chip', "We're all"));
+    const bookedCard = await waitFor('document.body.innerText.toLowerCase().includes("check in by") || document.body.innerText.includes("No free table")', 20000);
     const finalText = await evalJs('document.body.innerText');
     check('navigator returns a booking card or honest alternatives', bookedCard, finalText.slice(0, 300));
     check('result card offers Undo and scanner', finalText.includes('Undo') || finalText.includes('Open scanner'));
@@ -202,7 +207,7 @@ try {
 
   await goto(`${BASE}/radar`);
   await sleep(1200);
-  check('radar still renders after the navigator run', (await evalJs('document.querySelectorAll(".room-row").length')) >= 2);
+  check('radar still renders after the navigator run', (await evalJs('document.querySelectorAll(".list .row").length')) >= 2);
 } catch (err) {
   console.error('ERROR', err.message);
   process.exitCode = 1;

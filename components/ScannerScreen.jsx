@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { fmtRange, useApp } from './AppState';
+import { IconQr, IconScan } from './Icons';
 
 export default function ScannerScreen() {
   const { state, act, showToast, session } = useApp();
@@ -13,18 +14,21 @@ export default function ScannerScreen() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
 
-  const tables = useMemo(() => (state.spaces || []).flatMap((s) => s.tables.map((t) => ({ ...t, space: s.name }))), [state.spaces]);
+  const tables = useMemo(
+    () => (state.spaces || []).flatMap((s) => s.tables.map((t) => ({ ...t, space: s.name }))),
+    [state.spaces],
+  );
 
   const targetId = params.get('t') || session?.table_id || '';
-  const token = params.get('k') || tables.find((t) => t.id === targetId)?.qr_token || '';
   const target = tables.find((t) => t.id === targetId);
+  const token = params.get('k') || target?.qr_token || '';
 
   async function checkin(tableId, code) {
     setBusy(true);
     const res = await act('checkin', { tableId, token: code });
     setBusy(false);
-    if (res.ok) showToast(`Checked in. +${res.points} OASIS Points.`);
-    else setNotice({ error: res.error, tableId, code });
+    if (res.ok) showToast(`Checked in. +${res.points} points.`);
+    else setNotice({ error: res.error });
     return res;
   }
 
@@ -32,8 +36,9 @@ export default function ScannerScreen() {
     setBusy(true);
     const res = await act('scan_sit', { tableId, token: code, duration });
     setBusy(false);
-    if (res.ok) showToast(`Sitting at ${target?.space || 'table'} ${target?.label || ''}. +${res.points} OASIS Points.`);
+    if (res.ok) showToast(`Sitting at table ${target?.label || ''}. +${res.points} points.`);
     else setNotice({ error: res.error });
+    return res;
   }
 
   async function submitManual(e) {
@@ -44,68 +49,83 @@ export default function ScannerScreen() {
       return;
     }
     const res = await checkin(table.id, manualCode.trim());
-    if (!res.ok) {
-      const sitRes = await sit(table.id, manualCode.trim());
-      if (sitRes.ok) setNotice(null);
-    }
+    if (!res.ok) await sit(table.id, manualCode.trim());
   }
 
   return (
     <>
-      <p className="hint">
-        Point the phone camera at the QR code on the table — it opens this screen. The in-app scanner and the manual
-        code are here for older phones and for the demo.
-      </p>
+      <div className="screen-head">
+        <div>
+          <h1>Scan</h1>
+          <span className="mono">check in · sit down</span>
+        </div>
+      </div>
 
-      {target && (
-        <div className="card" style={{ borderColor: 'var(--teal)' }}>
-          <div className="row between">
-            <strong>{target.space} · table {target.label}</strong>
-            <span className="badge">{target.capacity} seats</span>
+      {target ? (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+            <div>
+              <span className="mono">{target.space.replace(' Demo', '')}</span>
+              <h3 style={{ marginTop: 4, fontSize: '1.2rem' }}>Table {target.label}</h3>
+              <p className="mono" style={{ marginTop: 4 }}>{target.capacity} seats</p>
+            </div>
+            <IconQr width={22} height={22} />
           </div>
-          <p style={{ marginTop: 6 }}>
+
+          <p style={{ marginTop: 12 }}>
             {session?.table_id === target.id
               ? session.checked_in
                 ? `Checked in. Session ends ${fmtRange(null, session.ends_at)}.`
-                : 'You are booked here. Confirm you are at the table.'
-              : 'Scan a table to sit down now, or check in to your booking.'}
+                : 'You hold this table — confirm you are standing at it.'
+              : 'Scanning a free table claims it for a walk-in session.'}
           </p>
-          <div className="qr-box" style={{ marginTop: 12 }}>
+
+          <div className="qr-box" style={{ marginTop: 16 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`/api/qr/${target.id}`} alt={`QR code for ${target.space} table ${target.label}`} />
           </div>
-          <div className="row" style={{ gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" onClick={() => checkin(target.id, token)} disabled={busy || !token}>
-              Check in here
+
+          <div className="field" style={{ marginTop: 16 }}>
+            <span className="field-label">Walk-in length · used by “Sit here”</span>
+            <div className="seg">
+              {[30, 60, 90, 120].map((d) => (
+                <button type="button" key={d} aria-pressed={duration === d} onClick={() => setDuration(d)}>{d}m</button>
+              ))}
+            </div>
+          </div>
+
+          <div className="session-actions" style={{ marginTop: 12 }}>
+            <button className="btn btn-primary btn-block" onClick={() => checkin(target.id, token)} disabled={busy || !token}>
+              <IconScan width={17} height={17} /> Check in to my booking
             </button>
-            <button className="btn" onClick={() => sit(target.id, token)} disabled={busy || !token}>
-              Sit here (walk-in)
+            <button className="btn btn-block" onClick={() => sit(target.id, token)} disabled={busy || !token}>
+              Sit here · start a {duration}-minute walk-in
             </button>
           </div>
-          {notice?.error && <p className="error" style={{ marginTop: 10 }}>{notice.error}</p>}
-        </div>
-      )}
 
-      {!target && (
-        <div className="card">
-          <h3>No table selected</h3>
-          <p>Scan a QR code, or pick the table and type the code printed under it.</p>
+          <p className="hint" style={{ marginTop: 10 }}>
+            Check in confirms a booking you already hold. Sit here claims a free table on the spot.
+          </p>
+
+          {notice?.error && <p className="error" style={{ marginTop: 12 }}>{notice.error}</p>}
+        </div>
+      ) : (
+        <div className="empty">
+          <IconScan width={34} height={34} />
+          <h2>No table selected</h2>
+          <p>Scan the QR code on the table, or pick one below and type its code.</p>
         </div>
       )}
 
       <form className="card" onSubmit={submitManual}>
         <h3>Manual code</h3>
-        <div className="field" style={{ marginTop: 10 }}>
+        <p>For older phones, or when the camera will not cooperate.</p>
+        <div className="field" style={{ marginTop: 14 }}>
           <label htmlFor="table">Table</label>
-          <select
-            id="table"
-            value={manualId}
-            onChange={(e) => setManualId(e.target.value)}
-            style={{ minHeight: 48, borderRadius: 12, border: '1px solid var(--line)', background: 'var(--navy-950)', padding: '10px 12px' }}
-          >
+          <select id="table" value={manualId} onChange={(e) => setManualId(e.target.value)}>
             <option value="">Choose a table…</option>
             {tables.map((t) => (
-              <option key={t.id} value={t.id}>{t.space} · {t.label}</option>
+              <option key={t.id} value={t.id}>{t.space.replace(' Demo', '')} · {t.label}</option>
             ))}
           </select>
         </div>
@@ -113,18 +133,11 @@ export default function ScannerScreen() {
           <label htmlFor="code">Code</label>
           <input id="code" type="text" value={manualCode} onChange={(e) => setManualCode(e.target.value)} placeholder="12-character code" autoComplete="off" />
         </div>
-        <div className="field">
-          <span className="label">Walk-in duration</span>
-          <div className="chips">
-            {[30, 60, 90, 120].map((d) => (
-              <button type="button" key={d} className="chip" aria-pressed={duration === d} onClick={() => setDuration(d)}>{d} min</button>
-            ))}
-          </div>
-        </div>
-        <button className="btn btn-primary btn-block" type="submit" disabled={busy}>Check in / sit here</button>
+        <button className="btn btn-block" type="submit" disabled={busy} style={{ marginTop: 4 }}>
+          Check in or sit here
+        </button>
         <p className="hint" style={{ marginTop: 10 }}>
-          Check-in only works if you are the host or a joined guest of the current session, before the 15-minute
-          deadline.
+          Check-in only works for the host or a joined guest of the live session, before the 15-minute deadline.
         </p>
       </form>
     </>

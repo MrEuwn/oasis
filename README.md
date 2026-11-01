@@ -64,8 +64,8 @@ Measured on the production build (`npm run build && npm start`), 1 Nov 2026, thi
 | `test:unit` | 14/14 |
 | `test:smoke` | 26/26 |
 | `test:ui` | 37/37, no console errors or hydration warnings |
-| `test:rehearsal` | 20/20 demo logins, 10/10 Navigator bookings, median ~71 ms per two-prompt run (offline parser) |
-| Lighthouse (landing, mobile) | Performance 96 · Accessibility 100 · Best practices 100 |
+| `test:rehearsal` | 20/20 demo logins, 10/10 Navigator bookings, median ~61 ms per two-prompt run (offline parser) |
+| Lighthouse (landing, mobile) | Performance 92 · Accessibility 100 · Best practices 100 |
 
 `scripts/smoke.mjs` exercises login, booking, joining, norms, overbooking, check-in, points, release, walk-in, two-report badge, Navigator clarification and Undo, QR rendering and reset. `scripts/ui-check.mjs` drives headless Chrome over CDP; set `CHROME_PATH` if Chrome is not in the default Windows location.
 
@@ -96,6 +96,10 @@ Known limitation carried over from the PRD: a static table QR can be photographe
 - Every demo screen is labelled simulated data. Nothing seeded is presented as a real campus result.
 - Google sign-in is not in this build: the team decided the demo login is enough for the submission.
 - AI assistance: the application was built with Hermes Agent; the Navigator calls the Gemini API at runtime, and the offline parser is deterministic and labelled in the UI.
+
+## Interface
+
+The UI is an instrument panel, not a marketing skin: ink surfaces, one phosphor-teal accent, hairline rules, mono data labels and tabular numerals, with Instrument Sans self-hosted from `public/fonts` (no webfont request, no layout shift). Status always carries icon, label and colour. The Radar is a sonar scope whose rooms are placed schematically and labelled as such; below it a three-cell status strip and a dense room list carry the real reading. Booking is one sheet: duration segment, mode cards, a real switch, seat stepper, and a CTA that restates the deal. The session screen centres a countdown dial that turns amber then red as the check-in window closes. Light theme and reduced motion are handled with tokens.
 
 ## Layout
 
