@@ -128,7 +128,37 @@ check('navigator declines off-topic requests', !offTopic.data.ok && /only help/i
 const qr = await seeker.req(`/api/qr/${free.id}`);
 check('table QR renders as SVG', qr.status === 200 && String(qr.data).startsWith('<svg'));
 
+// Camera feed: counts + labels in, occupancy out. No pixels, no auth cookie.
+const camTarget = state.spaces.flatMap((s) => s.tables).find((t) => t.status === 'empty' && t.id !== 'L3');
+const camSpace = state.spaces.find((s) => s.tables.some((t) => t.id === camTarget.id));
+const camPayload = {
+  camera_id: 'cam-smoke',
+  space: camSpace.name.replace(' Demo', ''),
+  tables: [{ label: camTarget.label, occupied: true, people: 2, chairs: 3, confidence: 0.88 }],
+};
+const camPost = await fetch(`${BASE}/api/sensor`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-sensor-key': 'oasis-demo-camera' },
+  body: JSON.stringify(camPayload),
+}).then((r) => r.json());
+check('camera reading accepted', camPost.ok && camPost.applied === 1, JSON.stringify(camPost));
+const afterCam = (await seeker.req('/api/state')).data.state;
+const camTable = afterCam.spaces.flatMap((s) => s.tables).find((t) => t.id === camTarget.id);
+check('radar shows In use from the camera', camTable.status === 'in_use' && camTable.camera.people === 2, camTable.status);
+const camRoom = afterCam.spaces.find((s) => s.id === camSpace.id);
+check('room is marked as camera-covered', camRoom.camera === true && camRoom.in_use >= 1);
+const camBook = await seeker.act('create_booking', { tableId: camTarget.id, duration: 60 });
+check('booking a camera-occupied table is refused', !camBook.data.ok && camBook.data.code === 'in_use', camBook.data.error);
+const badKey = await fetch(`${BASE}/api/sensor`, {
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-sensor-key': 'wrong' },
+  body: JSON.stringify(camPayload),
+}).then((r) => r.status);
+check('sensor endpoint rejects a wrong key', badKey === 401, String(badKey));
+
 const reset = await seeker.act('reset_demo');
 check('reset demo restores the seed', reset.data.ok && reset.data.state.me.points === 20, `points=${reset.data.state.me.points}`);
+const resetCam = reset.data.state.spaces.flatMap((s) => s.tables).find((t) => t.id === camTarget.id);
+check('reset clears camera readings', resetCam.camera === null && resetCam.status === 'empty');
 
 console.log(`\n${passed} checks passed${process.exitCode ? ' — with failures' : ''}`);

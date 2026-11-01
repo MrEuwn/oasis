@@ -3,8 +3,8 @@
 import { useEffect } from 'react';
 import { IconClose } from './Icons';
 
-const LABELS = { empty: 'Empty', open: 'Open Table', full: 'Full' };
-const ROOM_LABELS = { empty: 'Free', open: 'Open', full: 'Full' };
+const LABELS = { empty: 'Empty', open: 'Open Table', full: 'Full', in_use: 'Seen occupied' };
+const ROOM_LABELS = { empty: 'Free', open: 'Open', full: 'Full', in_use: 'Occupied' };
 
 export function Status({ status, room = false }) {
   return (

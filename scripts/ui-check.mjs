@@ -208,6 +208,36 @@ try {
   await goto(`${BASE}/radar`);
   await sleep(1200);
   check('radar still renders after the navigator run', (await evalJs('document.querySelectorAll(".list .row").length')) >= 2);
+
+  // Camera fuse: a reading from the detector turns a free table into In use.
+  const camTarget = await evalJs(`(async () => {
+    const r = await fetch('/api/state').then((x) => x.json());
+    const space = r.state.spaces[0];
+    const table = space.tables.find((t) => t.status === 'empty');
+    return table ? { id: table.id, label: table.label, space: space.name } : null;
+  })()`);
+  check('a free table exists for the camera test', Boolean(camTarget));
+  if (camTarget) {
+    const posted = await evalJs(`(async () => {
+      const r = await fetch('/api/sensor', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-sensor-key': 'oasis-demo-camera' },
+        body: JSON.stringify({ camera_id: 'cam-ui', space: ${JSON.stringify(camTarget.space)}, tables: [{ label: ${JSON.stringify(camTarget.label)}, occupied: true, people: 2, chairs: 3, confidence: 0.9 }] }),
+      });
+      return r.json();
+    })()`);
+    check('sensor reading accepted over HTTP', posted.ok === true, JSON.stringify(posted));
+    await goto(`${BASE}/radar`);
+    await sleep(900);
+    const camText = await evalJs('document.body.innerText');
+    check('radar shows an In use status', /in use/i.test(camText));
+    check('room carries the Cam badge', /cam/i.test(camText));
+    check('open the room to see the tables', await clickText('.list .row', camTarget.space.replace(' Demo', '')));
+    await waitFor('!!document.querySelector(".sheet .row")');
+    const camSheet = await evalJs('document.querySelector(".sheet").innerText');
+    check('table row shows the camera count', /CAM 2p/i.test(camSheet), camSheet.slice(0, 160));
+    await evalJs(`fetch('/api/act', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reset_demo' }) })`);
+  }
 } catch (err) {
   console.error('ERROR', err.message);
   process.exitCode = 1;

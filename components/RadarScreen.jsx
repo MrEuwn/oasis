@@ -94,6 +94,14 @@ function TableRow({ table, onPick }) {
           Table {table.label}
           {table.is_priority && <span className="badge badge-star">Priority</span>}
           {table.busy && <span className="badge badge-alert">Reported busy</span>}
+          {table.camera?.occupied && (
+            <span
+              className="badge badge-cam"
+              title={`Camera ${table.camera.id} · ${table.camera.age_s}s ago · ${table.camera.confidence ?? '—'} conf`}
+            >
+              CAM {table.camera.people}p
+            </span>
+          )}
         </div>
         <div className="row-meta">
           <span>{table.capacity} seats</span>
@@ -167,6 +175,21 @@ function TableDetail({ space, table, onClose, onBook, onJoin }) {
         </div>
       </div>
 
+      {table.camera && (
+        <div>
+          <div className="kv">
+            <span className="k">Camera</span>
+            <span className="v">
+              {table.camera.people} {table.camera.people === 1 ? 'person' : 'people'} · {table.camera.chairs} chairs detected
+            </span>
+          </div>
+          <div className="kv">
+            <span className="k">Seen</span>
+            <span className="v">{table.camera.age_s}s ago · {table.camera.id}</span>
+          </div>
+        </div>
+      )}
+
       {table.host && (
         <div>
           <div className="kv">
@@ -194,6 +217,12 @@ function TableDetail({ space, table, onClose, onBook, onJoin }) {
 
       {table.status === 'empty' && (
         <p className="hint">Booking holds the table for 15 minutes while you walk over. Cancel any time before check-in — free.</p>
+      )}
+      {table.status === 'in_use' && (
+        <p className="hint">
+          The camera sees people here and nobody booked it. Walk up and scan the table QR to start a session — or pick a
+          camera-empty table below.
+        </p>
       )}
     </Sheet>
   );
@@ -384,6 +413,7 @@ export default function RadarScreen() {
 
   const free = spaces.reduce((n, s) => n + s.tables_free, 0);
   const open = spaces.reduce((n, s) => n + s.open_tables, 0);
+  const inUse = spaces.reduce((n, s) => n + (s.in_use || 0), 0);
   const seats = spaces.reduce((n, s) => n + s.tables.reduce((m, t) => m + (t.status === 'open' ? t.seats_free : 0), 0), 0);
 
   const openTables = useMemo(
@@ -460,6 +490,12 @@ export default function RadarScreen() {
           <b>{seats}</b>
           <span>Seats to join</span>
         </div>
+        {inUse > 0 && (
+          <div className="stat">
+            <b>{inUse}</b>
+            <span>Camera in use</span>
+          </div>
+        )}
       </div>
 
       <div className="list">
@@ -470,7 +506,10 @@ export default function RadarScreen() {
         {spaces.map((s) => (
           <button key={s.id} className="row" onClick={() => setSpaceId(s.id)}>
             <div className="row-main">
-              <div className="row-title">{s.name.replace(' Demo', '')}</div>
+              <div className="row-title">
+                {s.name.replace(' Demo', '')}
+                {s.camera && <span className="badge badge-cam">Cam</span>}
+              </div>
               <div className="row-meta">
                 <span>Floor {s.floor}</span>
                 <span>· {s.tables_total} tables</span>

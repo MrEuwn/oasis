@@ -2,3 +2,10 @@ node_modules
 .next
 .data
 .env*.local
+cv/.venv
+cv/data
+cv/dataset
+cv/dataset-coco
+cv/runs
+cv/media
+*.pt

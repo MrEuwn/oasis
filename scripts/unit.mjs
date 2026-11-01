@@ -12,6 +12,7 @@ import {
   tableView,
   userSession,
 } from '../lib/domain.js';
+import { applyReadings } from '../lib/sensors.js';
 
 let passed = 0;
 function check(name, ok, extra = '') {
@@ -98,5 +99,25 @@ seedDemoState(fresh);
 const survivor = fresh.bookings.find((b) => b.id === 'real-booking');
 check('demo reseed preserves real rows', Boolean(survivor) && survivor.status === 'reserved');
 check('demo reseed rebuilds exactly one host Open Table', fresh.bookings.filter((b) => b.is_demo).length === 1);
+
+// Camera readings: occupancy without a booking, staleness, and booking safety.
+const camDb = seedDb();
+const camSpace = camDb.spaces.find((s) => s.is_demo);
+const camTable = camDb.tables.find((t) => t.space_id === camSpace.id && !sessionAt(camDb, t.id));
+const label = camTable.label;
+const applied = applyReadings(camDb, {
+  camera_id: 'cam-test',
+  space: camSpace.name,
+  tables: [{ label, occupied: true, people: 2, chairs: 4, confidence: 0.91 }, { label: 'NOPE', occupied: true }],
+});
+check('sensor reading maps a table label to the room', applied.ok && applied.applied === 1, JSON.stringify(applied));
+check('camera occupancy turns a free table into In use', tableView(camDb, camTable).status === 'in_use');
+check('camera counts are exposed to the view', tableView(camDb, camTable).camera?.people === 2);
+const blocked = createBooking(camDb, camDb.profiles.find((p) => p.persona === 'seeker'), { tableId: camTable.id, duration: 60 });
+check('booking a camera-occupied table is refused', !blocked.ok && blocked.code === 'in_use', blocked.error);
+camDb.sensor_readings[0].observed_at = new Date(Date.now() - 5 * 60000).toISOString();
+check('stale readings stop influencing the room', tableView(camDb, camTable).status === 'empty' && tableView(camDb, camTable).camera === null);
+const badKeyShape = applyReadings(camDb, { camera_id: 'cam-test', tables: [] });
+check('empty sensor payload is rejected', !badKeyShape.ok);
 
 console.log(`\n${passed} checks passed${process.exitCode ? ' — with failures' : ''}`);

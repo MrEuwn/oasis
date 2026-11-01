@@ -1026,6 +1026,18 @@ ol {
 .status.open i { background: var(--amber); }
 .status.full { color: var(--red); }
 .status.full i { background: var(--red); }
+.status.in_use { color: var(--violet, #a99bff); }
+.status.in_use i { background: var(--violet, #a99bff); }
+
+.badge-cam {
+  color: var(--violet, #a99bff);
+  border-color: color-mix(in srgb, var(--violet, #a99bff) 40%, transparent);
+}
+
+.badge-dim {
+  color: var(--dim);
+  border-color: var(--line);
+}
 
 /* ---------------- radar ---------------- */
 
@@ -1177,7 +1189,7 @@ ol {
 
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   border: 1px solid var(--line);
   border-radius: var(--r-md);
   overflow: hidden;
@@ -1248,6 +1260,7 @@ ol {
 .row-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 0.9375rem;
   font-weight: 500;

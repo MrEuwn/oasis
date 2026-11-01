@@ -61,9 +61,9 @@ Measured on the production build (`npm run build && npm start`), 1 Nov 2026, thi
 
 | Check | Result |
 | --- | --- |
-| `test:unit` | 14/14 |
-| `test:smoke` | 26/26 |
-| `test:ui` | 37/37, no console errors or hydration warnings |
+| `test:unit` | 20/20 |
+| `test:smoke` | 32/32 |
+| `test:ui` | 43/43, no console errors or hydration warnings |
 | `test:rehearsal` | 20/20 demo logins, 10/10 Navigator bookings, median ~61 ms per two-prompt run (offline parser) |
 | Lighthouse (landing, mobile) | Performance 92 · Accessibility 100 · Best practices 100 |
 
@@ -100,6 +100,16 @@ Known limitation carried over from the PRD: a static table QR can be photographe
 ## Interface
 
 The UI is an instrument panel, not a marketing skin: ink surfaces, one phosphor-teal accent, hairline rules, mono data labels and tabular numerals, with Instrument Sans self-hosted from `public/fonts` (no webfont request, no layout shift). Status always carries icon, label and colour. The Radar is a sonar scope whose rooms are placed schematically and labelled as such; below it a three-cell status strip and a dense room list carry the real reading. Booking is one sheet: duration segment, mode cards, a real switch, seat stepper, and a CTA that restates the deal. The session screen centres a countdown dial that turns amber then red as the check-in window closes. Light theme and reduced motion are handled with tokens.
+
+## Camera occupancy (optional, edge CV)
+
+A second source of truth for the radar: a camera counts people per table and
+posts **integers only** to `/api/sensor`. Fusion rule: a free table that the
+camera sees occupied becomes `Seen occupied` (and cannot be booked); a booked
+table keeps its booking status so no-shows stay visible; a reading older than
+90 s is ignored and the app falls back to booking-only truth. No frames, faces
+or identities leave the detector. Full detail, training recipe and metrics:
+[`cv/README.md`](cv/README.md).
 
 ## Layout
 
