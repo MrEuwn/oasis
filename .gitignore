@@ -13,7 +13,5 @@ cv/media
 # local UI screenshots
 shots/
 
-# agent scratch
-AGENTS.md
 __pycache__/
 *.pyc
