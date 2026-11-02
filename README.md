@@ -95,7 +95,7 @@ Known limitation carried over from the PRD: a static table QR can be photographe
 - Metrics in `public/docs/OASIS_PRD_v3.md` are **targets**. No baseline, pilot or Lighthouse numbers are claimed here.
 - Every demo screen is labelled simulated data. Nothing seeded is presented as a real campus result.
 - Google sign-in is not in this build: the team decided the demo login is enough for the submission.
-- AI assistance: the application was built with Hermes Agent; the Navigator calls the Gemini API at runtime, and the offline parser is deterministic and labelled in the UI.
+- Navigator: the hosted model is called only when `GEMINI_API_KEY` is set; without a key the local parser answers deterministically and the UI says so.
 
 
 ### Camera preview in the admin dashboard

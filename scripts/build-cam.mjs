@@ -6,7 +6,7 @@ import { mkdirSync, readFileSync, statSync, existsSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = process.cwd();
-const FF = process.env.FFMPEG || path.join(process.env.LOCALAPPDATA || '', 'hermes/tools/ffmpeg-9.0.1-win32-x64/bin/ffmpeg.exe');
+const FF = process.env.FFMPEG || 'ffmpeg';
 const OUT = path.join(ROOT, 'public/cam');
 mkdirSync(OUT, { recursive: true });
 
