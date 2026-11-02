@@ -1,28 +1,25 @@
-// Drives headless Chrome over CDP to verify the OASIS UI flows.
+// Drives headless Chrome over CDP to verify the OASIS v4 UI: landing roles,
+// the single user screen, the admin dashboard, and no horizontal overflow.
 import { spawn } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const CHROME = process.env.CHROME_PATH || "C:/Program Files/Google/Chrome/Application/chrome.exe";
+const CHROME = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const BASE = process.env.BASE || 'http://localhost:3000';
-const PORT = 9223;
-const profile = mkdtempSync(path.join(tmpdir(), 'oasis-chrome-'));
+const PORT = 9224;
+const profile = mkdtempSync(path.join(tmpdir(), 'oasis-ui-'));
 
-const chrome = spawn(
-  CHROME,
-  [
-    '--headless=new',
-    `--remote-debugging-port=${PORT}`,
-    `--user-data-dir=${profile}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    '--disable-gpu',
-    '--window-size=420,900',
-    'about:blank',
-  ],
-  { stdio: 'ignore' },
-);
+const chrome = spawn(CHROME, [
+  '--headless=new',
+  `--remote-debugging-port=${PORT}`,
+  `--user-data-dir=${profile}`,
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--disable-gpu',
+  '--window-size=1440,900',
+  'about:blank',
+], { stdio: 'ignore' });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -75,7 +72,7 @@ async function evalJs(expression) {
 async function goto(url) {
   await send('Page.navigate', { url });
   await waitFor('document.readyState === "complete"', 15000);
-  await sleep(400);
+  await sleep(450);
 }
 
 async function waitFor(expression, timeout = 8000) {
@@ -89,162 +86,145 @@ async function waitFor(expression, timeout = 8000) {
   return false;
 }
 
+async function viewport(width, height) {
+  await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 700 });
+}
+
 let passed = 0;
+const failures = [];
 function check(name, ok, extra = '') {
   if (ok) {
     passed += 1;
     console.log(`ok    ${name}`);
   } else {
+    failures.push(name);
     console.error(`FAIL  ${name}${extra ? ' — ' + extra : ''}`);
     process.exitCode = 1;
   }
 }
 
-const clickText = (sel, text) =>
-  evalJs(`(() => {
-    const el = [...document.querySelectorAll(${JSON.stringify(sel)})].find((e) => e.textContent.includes(${JSON.stringify(text)}));
-    if (!el) return false;
-    el.click();
-    return true;
-  })()`);
+const clickSel = (sel) => evalJs(`(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (!el) return false; el.click(); return true; })()`);
+const login = (persona) => evalJs(`fetch('/api/auth/demo',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({persona:${JSON.stringify(persona)}})}).then(r=>r.json()).then(r=>r.ok)`);
+const reset = () => evalJs(`fetch('/api/act',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reset_demo'})}).then(r=>r.json()).then(r=>r.ok)`);
 
 try {
   await waitDevtools();
   await connect();
   await send('Runtime.enable');
   await send('Page.enable');
+  await viewport(1440, 900);
 
-  await goto(BASE);
-  check('landing renders hero', (await evalJs('document.body.innerText')).includes('Find a seat.'));
-  check('landing shows the value line', /see it\. claim it\. share it\./i.test(await evalJs('document.body.innerText')));
-  check('landing marks sample data', /sample data/i.test(await evalJs('document.body.innerText')));
+  // ---------------------------------------------------------------- landing
+  await goto(`${BASE}/`);
+  const land = await evalJs('document.body.innerText');
+  check('landing renders the headline', land.includes('Find a seat.'));
+  check('landing states the product line', /fact, not a guess/.test(land));
+  check('landing offers exactly two roles', (await evalJs('document.querySelectorAll(".l4-role").length')) === 2);
+  check('role cards are Admin and User', /Admin/.test(land) && /User/.test(land));
+  check('landing numbers come from the store', /10/.test(await evalJs('document.querySelector(".l4-proof").innerText')));
+  check('camera state is honest', /camera|readings/i.test(await evalJs('document.querySelector(".l4-coverage").innerText')));
 
-  check('demo button exists', await clickText('button', 'Enter as Demo Seeker'));
-  const onRadar = await waitFor('location.pathname === "/radar" && document.querySelectorAll(".list .row").length >= 2', 20000);
-  check('demo login lands on the Radar', onRadar, await evalJs('location.pathname + " " + document.body.innerText.slice(0,120)'));
-
-  // Start from a known demo state so repeated runs behave the same.
-  await evalJs(`fetch('/api/act', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reset_demo' }) })`);
+  // ---------------------------------------------------------------- user
+  await login('seeker');
   await goto(`${BASE}/radar`);
-  await sleep(600);
+  await waitFor('document.querySelectorAll(".u4-row").length >= 10');
+  const rows = await evalJs('document.querySelectorAll(".u4-row").length');
+  check('user screen lists every table', rows === 10, `rows=${rows}`);
 
-  const radarText = await evalJs('document.body.innerText');
-  check('demo banner is visible', /demo mode · simulated campus data/i.test(radarText));
-  check('radar shows both rooms', radarText.includes('Library') && radarText.includes('Student Centre'));
-  check('status labels are textual, not colour only', /empty/i.test(radarText) && /shared/i.test(radarText));
-  check('updated label is present', /live/i.test(radarText));
+  const hero = await evalJs('document.querySelector(".u4-count b").innerText');
+  const freeRows = await evalJs('document.querySelectorAll(".u4-chip.t-empty").length');
+  check('hero count matches the free rows', String(freeRows) === hero, `hero=${hero} rows=${freeRows}`);
 
-  await clickText('.list .row', 'Library');
-  await waitFor('!!document.querySelector(".sheet .row")');
-  const sheetText = await evalJs('document.querySelector(".sheet")?.innerText || ""');
-  check('room sheet lists tables and seats', sheetText.includes('Table L1') && sheetText.includes('seats'));
-  check('room sheet exposes filters', sheetText.includes('Free') && sheetText.includes('Open'));
+  const camLine = await waitFor('!!document.querySelector(".u4-camline")', 6000);
+  const camText = await evalJs('document.querySelector(".u4-camline")?.innerText || ""');
+  check('user screen shows the camera replay line', camLine && /replay/i.test(camText), camText);
 
-  const openRow = await evalJs(`(() => {
-    const rows = [...document.querySelectorAll('.sheet .row')];
-    const row = rows.find((r) => r.textContent.includes('Empty'));
-    if (!row) return false;
-    row.click(); return true;
-  })()`);
-  check('an Empty table can be opened', openRow);
-  await waitFor('document.body.innerText.includes("Book now")');
+  const defDur = await evalJs('document.querySelectorAll(".u4-seg button.is-on")[0].innerText');
+  const defMode = await evalJs('document.querySelectorAll(".u4-seg button.is-on")[1].innerText');
+  check('booking defaults to 60 min deep work', defDur === '60' && /deep work/i.test(defMode), `${defDur}/${defMode}`);
 
-  check('table detail offers Book now', await clickText('button', 'Book now'));
-  await waitFor('document.body.innerText.includes("Book this table")');
-  const bookingSheet = await evalJs('document.querySelector(".sheet").innerText');
-  check('booking sheet pre-fills duration and mode', bookingSheet.includes('60m') && bookingSheet.includes('Deep Work'));
+  const overflow = await evalJs('document.documentElement.scrollWidth - window.innerWidth');
+  check('no horizontal overflow at 1440', overflow <= 1, `overflow=${overflow}`);
 
-  check('Open Table toggle works', await clickText('.switch-row', 'Open table'));
-  await waitFor('document.body.innerText.toUpperCase().includes("SEATS TO OPEN")');
-  const afterToggle = await evalJs('document.querySelector(".sheet").innerText');
-  check('seat stepper appears after toggling', /SEATS TO OPEN/i.test(afterToggle));
+  await clickSel('.u4-cta');
+  const booked = await waitFor('!!document.querySelector(".u4-note")', 10000);
+  const note = await evalJs('document.querySelector(".u4-note")?.innerText || ""');
+  check('booking confirms in one action', booked && /booked/i.test(note), note);
 
-  check('publish button is offered', await clickText('button', 'Publish ·'));
-  const published = await waitFor('document.querySelector(".toast")?.innerText.toLowerCase().includes("open table published")', 10000);
-  check('publishing shows a toast with Undo', published && (await evalJs('document.querySelector(".toast").innerText.includes("Undo")')));
-
-  await goto(`${BASE}/session`);
-  const sessionText = await evalJs('document.body.innerText');
-  check('session screen shows the countdown', /to check in|until the session ends/i.test(sessionText));
-  check('session screen offers check-in', sessionText.includes('Check in'));
-  check('session screen shows the table QR', (await evalJs('!!document.querySelector(".qr-box img")')));
-
-  check('go to scanner', await clickText('a', 'Check in'));
-  await waitFor('location.pathname === "/scan"', 15000);
-  await waitFor('document.body.innerText.includes("Check in to my booking")', 15000);
-  check('scanner knows the table', (await evalJs('document.body.innerText')).includes('Library'));
-  // The check-in button is disabled until state settles with the demo token.
-  await waitFor('[...document.querySelectorAll("button")].some((b) => b.textContent.includes("Check in to my booking") && !b.disabled)', 10000);
-  check('demo scanner is armed with the table token', await clickText('button', 'Check in to my booking'));
-  const checkedIn = await waitFor('document.querySelector(".toast")?.innerText.includes("Checked in")', 10000);
-  check('check-in shows the points toast', checkedIn);
-
-  await goto(`${BASE}/session`);
-  check('end the session from the session screen', await clickText('button', 'End session'));
-  const ended = await waitFor('document.querySelector(".toast")?.innerText.includes("released")', 10000);
-  check('ending frees the table with a toast', ended);
-
-  await goto(`${BASE}/points`);
-  const pointsText = await evalJs('document.body.innerText');
-  check('points screen shows the balance', /37|Balance/i.test(pointsText));
-  check('points screen lists tiers', /shallows/i.test(pointsText) && /reef/i.test(pointsText));
-
-  await goto(`${BASE}/navigator`);
-  check('navigator shows suggestion chips', (await evalJs('document.body.innerText')).includes('Find a quiet table for 4 people in the library'));
-  check('send a navigator prompt', await clickText('.chip', 'Find a quiet table for 4 people in the library'));
-  const clarified = await waitFor('document.body.innerText.includes("Already") && document.body.innerText.includes("partner")', 20000);
-  const navText = await evalJs('document.body.innerText');
-  check('navigator shows the step trace', navText.includes('Understanding') && navText.includes('Party status'));
-  check('navigator asks a clarifying question', clarified, navText.slice(0, 300));
-
-  if (clarified) {
-    check('answer the clarifying question', await clickText('.chip', "We're all"));
-    const bookedCard = await waitFor('document.body.innerText.toLowerCase().includes("check in by") || document.body.innerText.includes("No free table")', 20000);
-    const finalText = await evalJs('document.body.innerText');
-    check('navigator returns a booking card or honest alternatives', bookedCard, finalText.slice(0, 300));
-    check('result card offers Undo and scanner', finalText.includes('Undo') || finalText.includes('Open scanner'));
-  }
-
+  await reset();
   await goto(`${BASE}/radar`);
-  await sleep(1200);
-  check('radar still renders after the navigator run', (await evalJs('document.querySelectorAll(".list .row").length')) >= 2);
+  check('reset restores the free count', (await evalJs('document.querySelectorAll(".u4-chip.t-empty").length')) === 9);
 
-  // Camera fuse: a reading from the detector turns a free table into In use.
-  const camTarget = await evalJs(`(async () => {
-    const r = await fetch('/api/state').then((x) => x.json());
-    const space = r.state.spaces[0];
-    const table = space.tables.find((t) => t.status === 'empty');
-    return table ? { id: table.id, label: table.label, space: space.name } : null;
+  // ---------------------------------------------------------------- admin
+  await login('admin');
+  await goto(`${BASE}/admin`);
+  await waitFor('document.querySelectorAll(".a4-kpi").length === 4');
+  const adm = await evalJs('document.body.innerText');
+  check('admin shows four KPIs', (await evalJs('document.querySelectorAll(".a4-kpi").length')) === 4);
+  check('admin lists the active room tables', (await evalJs('document.querySelectorAll(".a4-table").length')) === 6);
+  check('admin names the model and its honest metric', /yolo/i.test(adm) && /0\.573/.test(adm));
+  check('admin declares the camera state', /No camera readings yet|stale|stream lost/i.test(adm));
+  check('admin keeps the event log', /event log/i.test(adm));
+
+  const hasVideo = await evalJs('!!document.querySelector(".a4-feed video")');
+  check('admin tile carries the room footage', hasVideo);
+  const videoState = await evalJs(`(() => { const v = document.querySelector('.a4-feed video'); return v ? JSON.stringify({t: v.currentTime, ready: v.readyState, paused: v.paused}) : '{}'; })()`);
+  const vs = JSON.parse(videoState);
+  check('footage plays without a click', vs.ready >= 2 && vs.paused === false, videoState);
+  const camBadges = await evalJs('document.querySelectorAll(".a4-cam").length');
+  check('frame readings reach the table cards', camBadges > 0, `badges=${camBadges}`);
+  const reachable = await evalJs(`(() => {
+    const rows = document.querySelectorAll('.a4-table');
+    const last = rows[rows.length - 1];
+    if (!last) return 'no rows';
+    last.scrollIntoView({ block: 'center' });
+    const r = last.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight + 1 ? 'visible' : 'clipped';
   })()`);
-  check('a free table exists for the camera test', Boolean(camTarget));
-  if (camTarget) {
-    const posted = await evalJs(`(async () => {
-      const r = await fetch('/api/sensor', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-sensor-key': 'oasis-demo-camera' },
-        body: JSON.stringify({ camera_id: 'cam-ui', space: ${JSON.stringify(camTarget.space)}, tables: [{ label: ${JSON.stringify(camTarget.label)}, occupied: true, people: 2, chairs: 3, confidence: 0.9 }] }),
-      });
-      return r.json();
-    })()`);
-    check('sensor reading accepted over HTTP', posted.ok === true, JSON.stringify(posted));
-    await goto(`${BASE}/radar`);
-    await sleep(900);
-    const camText = await evalJs('document.body.innerText');
-    check('radar shows an In use status', /in use/i.test(camText));
-    check('room carries the Cam badge', /cam/i.test(camText));
-    check('open the room to see the tables', await clickText('.list .row', camTarget.space.replace(' Demo', '')));
-    await waitFor('!!document.querySelector(".sheet .row")');
-    const camSheet = await evalJs('document.querySelector(".sheet").innerText');
-    check('table row shows the camera count', /CAM 2p/i.test(camSheet), camSheet.slice(0, 160));
-    await evalJs(`fetch('/api/act', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'reset_demo' }) })`);
-  }
-} catch (err) {
-  console.error('ERROR', err.message);
-  process.exitCode = 1;
+  check('last table card is reachable', reachable === 'visible', reachable);
+
+  const tabs = await evalJs('[...document.querySelectorAll(".a4-cam-tabs button")].map(b=>b.textContent.trim())');
+  check('both rooms have a camera tab', tabs.length === 2, JSON.stringify(tabs));
+  const beforeSrc = await evalJs('document.querySelector(".a4-feed video").getAttribute("src")');
+  await evalJs('[...document.querySelectorAll(".a4-cam-tabs button")].find(b=>/Student Centre/i.test(b.textContent)).click()');
+  await waitFor(`document.querySelector('.a4-feed video')?.getAttribute('src') !== ${JSON.stringify(beforeSrc)}`, 6000);
+  const afterSrc = await evalJs('document.querySelector(".a4-feed video").getAttribute("src")');
+  check('switching cameras swaps the footage', afterSrc !== beforeSrc && /canteen/.test(afterSrc), `${beforeSrc} -> ${afterSrc}`);
+  const otherBadge = await waitFor('!!document.querySelector(".a4-cam")', 6000);
+  check('switched frame feeds table badges', otherBadge);
+  const otherTables = await evalJs('document.querySelectorAll(".a4-table").length');
+  check('switched tab shows its own tables', otherTables === 4, `tables=${otherTables}`);
+  const badges = await evalJs('[...document.querySelectorAll(".a4-cam")].map(e=>e.textContent.trim())');
+  check('badges carry people and seen/clear', badges.some((b) => /\d+p · (seen|clear)/.test(b)), JSON.stringify(badges));
+  const railFoot = await evalJs('document.querySelector(".a4-rail-foot")?.innerText || ""');
+  check('rail reports fps and unassigned', /fps/.test(railFoot) && /unassigned/.test(railFoot), railFoot);
+  const coverageText = await evalJs('document.querySelector(".a4-panel:last-of-type")?.innerText || document.body.innerText');
+  check('coverage names the replay camera', /recorded replay/i.test(coverageText));
+
+  await evalJs('[...document.querySelectorAll(".u4-seg button")].find(b=>b.textContent.trim()==="mock").click()');
+  const mockOn = await evalJs('[...document.querySelectorAll(".u4-seg button")].find(b=>b.textContent.trim()==="mock").classList.contains("is-on")');
+  check('mock source can be selected', mockOn);
+
+  const adminOverflow = await evalJs('document.documentElement.scrollWidth - window.innerWidth');
+  check('no horizontal overflow on admin', adminOverflow <= 1, `overflow=${adminOverflow}`);
+
+  // ---------------------------------------------------------------- mobile
+  await login('seeker');
+  await viewport(390, 844);
+  await goto(`${BASE}/radar`);
+  await waitFor('document.querySelectorAll(".u4-row").length >= 10');
+  const mOverflow = await evalJs('document.documentElement.scrollWidth - window.innerWidth');
+  check('no horizontal overflow at 390', mOverflow <= 1, `overflow=${mOverflow}`);
+  const navItems = await evalJs('document.querySelectorAll(".nav a").length');
+  check('user nav stays at four items', navItems === 4, `items=${navItems}`);
+  const ctaBox = await evalJs('JSON.stringify(document.querySelector(".u4-cta").getBoundingClientRect())');
+  check('primary CTA is at least 44px tall', JSON.parse(ctaBox).height >= 44, ctaBox);
+
+  await goto(`${BASE}/`);
+  check('landing stacks on mobile', await evalJs('getComputedStyle(document.querySelector(".l4-body")).gridTemplateColumns.split(" ").length === 1'));
+
+  console.log(`\n${passed} UI checks passed${failures.length ? ` — ${failures.length} failed: ${failures.join(', ')}` : ''}`);
 } finally {
-  console.log(`\n${passed} UI checks passed${process.exitCode ? ' — with failures' : ''}`);
-  try {
-    ws?.close();
-  } catch {}
+  try { ws?.close(); } catch {}
   chrome.kill();
 }

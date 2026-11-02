@@ -72,6 +72,44 @@ def count_zone(people, chairs, polygon):
     return n_people, n_chairs, conf
 
 
+
+def cluster_zones(people, k, shape, pad=0.55):
+    """Tables can be inferred from where people sit when the bench itself is not
+    detected (long canteen tables defeat a COCO table box). Simple k-means over
+    the feet points, k tables, boxes ordered left to right."""
+    pts = np.array([[p[0], p[1]] for p in people], dtype=np.float32)
+    if len(pts) < k:
+        return []
+    # deterministic init: spread seeds across x, then refine
+    order = np.argsort(pts[:, 0])
+    seeds = pts[order[np.linspace(0, len(pts) - 1, k).astype(int)]].copy()
+    for _ in range(25):
+        d = ((pts[:, None, :] - seeds[None, :, :]) ** 2).sum(axis=2)
+        lab = d.argmin(axis=1)
+        for j in range(k):
+            if (lab == j).any():
+                seeds[j] = pts[lab == j].mean(axis=0)
+    h, w = shape[:2]
+    boxes = []
+    for j in range(k):
+        group = pts[lab == j]
+        if len(group) == 0:
+            continue
+        x1, y1 = group.min(axis=0)
+        x2, y2 = group.max(axis=0)
+        bw, bh = x2 - x1, y2 - y1
+        x1, x2 = x1 - bw * pad, x2 + bw * pad
+        y1, y2 = y1 - bh * pad, y2 + bh * pad
+        boxes.append((float(max(0.0, x1)), float(max(0.0, y1)),
+                      float(min(w - 1, x2)), float(min(h - 1, y2))))
+    boxes.sort(key=lambda b: b[0])
+    return [
+        {"label": f"T{i + 1}", "polygon": [[float(b[0]), float(b[1])], [float(b[2]), float(b[1])],
+                                            [float(b[2]), float(b[3])], [float(b[0]), float(b[3])]]}
+        for i, b in enumerate(boxes)
+    ]
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True, help="video file, rtsp:// url or webcam index")
@@ -82,6 +120,10 @@ def main():
     ap.add_argument("--camera-id", default="cam-library-1")
     ap.add_argument("--auto-zones", action="store_true", help="derive zones from the first frame and save them")
     ap.add_argument("--save-zones", default=None)
+    ap.add_argument("--cluster-zones", type=int, default=0,
+                    help="derive zones by clustering seated people instead of table boxes (needs --zone-at)")
+    ap.add_argument("--zone-at", type=float, default=0,
+                    help="seconds into the clip to derive zones from (0 = first frame)")
     ap.add_argument("--labels", default="L1,L2,L3,L4,L5,L6")
     ap.add_argument("--interval", type=float, default=2.0, help="seconds between analysed frames")
     ap.add_argument("--conf", type=float, default=0.35)
@@ -95,6 +137,7 @@ def main():
     args = ap.parse_args()
 
     model = YOLO(args.model)
+    zone_model = YOLO(args.zone_model) if args.zone_model else model
     person_idx = class_index(model, "person")
     chair_idx = class_index(model, "chair")
     if not person_idx:
@@ -113,6 +156,36 @@ def main():
         args.camera_id = cfg.get("camera_id", args.camera_id)
         args.space = args.space or cfg.get("space")
         zones = cfg["zones"]
+
+    # A wide shot can open on empty floor; derive zones from a frame that
+    # actually shows tables instead of failing on frame one.
+    if zones is None and args.zone_at:
+        probe = cv2.VideoCapture(src)
+        probe.set(cv2.CAP_PROP_POS_MSEC, args.zone_at * 1000)
+        ok, probe_frame = probe.read()
+        probe.release()
+        if ok:
+            if args.cluster_zones:
+                pr = model.predict(probe_frame, conf=args.conf, imgsz=args.imgsz, verbose=False)[0]
+                feet = []
+                for box, name in zip(pr.boxes.xyxy.tolist(), [model.names[int(c)] for c in pr.boxes.cls.tolist()]):
+                    if name == "person":
+                        feet.append(((box[0] + box[2]) / 2, box[3], 1.0))
+                zones = cluster_zones(feet, args.cluster_zones, probe_frame.shape)
+                if zones:
+                    labels = args.labels.split(",")
+                    for i, z in enumerate(zones):
+                        z["label"] = labels[i] if i < len(labels) else z["label"]
+            else:
+                zones = auto_zones(zone_model, probe_frame, args.conf, args.labels.split(","))
+            if zones:
+                out = args.save_zones or args.cameras
+                Path(out).parent.mkdir(parents=True, exist_ok=True)
+                Path(out).write_text(
+                    json.dumps({"camera_id": args.camera_id, "space": args.space, "zones": zones}, indent=1),
+                    encoding="utf-8",
+                )
+                print(f"zones from t={args.zone_at}s -> {out} ({len(zones)} tables)")
 
     writer = None
     frame_no = 0
@@ -143,7 +216,6 @@ def main():
                 chairs.append(((x1 + x2) / 2, (y1 + y2) / 2))
 
         if zones is None:
-            zone_model = YOLO(args.zone_model) if args.zone_model else model
             zones = auto_zones(zone_model, frame, args.conf, args.labels.split(","))
             if not zones:
                 sys.exit("no table detected on the first frame — point the camera at tables or write zones by hand")

@@ -67,3 +67,10 @@ python cv/score_occupancy.py --labels cv/labels/study.json --readings cv/runs/st
 The baseline numbers in the first column come from `cv/make_baseline_eval.py`,
 which re-labels the val split with COCO ids so an 80-class checkpoint can be
 scored without the class-index mismatch.
+
+### Replay render (this machine, CPU)
+
+119 frames of `cv/media/study.mp4` analysed and annotated in 22.9 s wall clock including model load —
+≤0.19 s per frame at `imgsz=512`; the busy canteen clip was 105 frames in 23.2 s (0.22 s per frame), i.e. ~5 fps sustained while also writing the annotated video.
+The earlier 1.2 s/frame figure was the first cold run at `imgsz=640` with disk cache off; quote whichever
+you measured, and always with the imgsz.

@@ -9,3 +9,11 @@ cv/dataset-coco
 cv/runs
 cv/media
 *.pt
+
+# local UI screenshots
+shots/
+
+# agent scratch
+AGENTS.md
+__pycache__/
+*.pyc

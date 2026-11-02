@@ -118,3 +118,90 @@ it the demo key `oasis-demo-camera` is accepted from `localhost` only.
   punishment. No points are ever deducted from a camera reading.
 - Training and inference here are CPU-only (no GPU on this machine): ~7 s per
   frame at 640 px, which is why the demo samples one frame every 2 s.
+
+### Footage sources
+
+**CDED-7** (Classroom Distraction Evaluation Dataset, Zenodo `10.5281/zenodo.21207208`,
+`fangsheng223/classroom-distraction-tracker`) supplies seven 1920×1080 classroom videos shot from a fixed
+high camera — the closest free match to a CCTV room. Licence: research / non-commercial only, so it powers
+the demo (`cv/media/cded7/videos/class_3.mp4`) and local testing, and is never redistributed.
+
+Pexels downloads work head-less via `https://www.pexels.com/download/video/<id>/` (302 → CDN mp4, no key).
+Mixkit pages only expose a **watermarked** Envato preview when scraped, so Mixkit clips are not used for
+judging material unless downloaded by hand from the site.
+
+### Replay assets used by the web demo
+
+`cv/media/study.mp4` (Pexels 7778452, free licence) → `cv/media/library-preview.mp4` + `library-readings.jsonl`
+→ `public/cam/library.{mp4,jpg,json}` via `node scripts/build-cam.mjs`. The dashboard labels this a replay.
+
+### Calibrate once, then count (v2 pipeline)
+
+```bash
+# 1. lock the tables for a camera (median over 40 frames, IDs T01.., capacity, zones)
+python cv/calibrate.py --source cv/media/candidates/7778451.mp4 --zone-model yolo11n.pt   --camera-id cam-library-1 --space Library --labels L1,L2,L3,L4,L5,L6   --capacity 4,2,4,6,2,8 --frames 40 --imgsz 960
+# long benches: table detection fails, so split the seated band into a grid
+python cv/calibrate.py --source cv/media/cafeteria.mp4 --grid-zones 1,4   --camera-id cam-canteen-1 --space "Student Centre" --labels S1,S2,S3,S4 --capacity 4,6,2,4
+
+# k-means over seated people exists too (--force-cluster --cluster-zones 4) but its
+# zones overlap heavily; grid zones assign cleanly, so prefer the grid for benches.
+
+# 2. count people per table with tracking + smoothing, write the web timeline
+python cv/count.py --source cv/media/candidates/7778451.mp4   --tables cv/tables/cam-library-1.json --out public/cam/library.json   --annotate cv/media/library-counted.mp4 --max-seconds 17
+
+# 3. encode the loop used by the admin tile
+node scripts/build-cam.mjs
+```
+
+`cv/tables/<camera>.json` is the source of truth for IDs, polygons and capacity: edit it (or
+recalibrate) and the dashboard, the API payload and the replay all follow. Counts are the median of the
+last 10 samples and one track belongs to at most one table.
+
+Assignment rule: distance from the person's feet to each **table rectangle** (inside = 0, beside = small),
+accepted if within `0.35 × min(width, height)` of that table; the nearest accepted one wins, everything
+else is reported as `unassigned`. Centre-distance was tried first and failed on both ends: it dumped people
+down the aisle onto the nearest canteen table and it missed people sitting at the far side of a wide cell.
+
+### Choosing footage (measured, not guessed)
+
+`cv/scan_footage.py` samples each candidate clip, counts detectable tables and people, and ranks the clips:
+
+```bash
+python cv/scan_footage.py cv/media/cand2/*.mp4 --json /tmp/scan.json
+```
+
+Result on ten free clips: only a food-court shot reached 6 detected tables (13 people); most library/coworking
+clips gave 0–3 tables at any confidence, and a wide camera does not fix small distant tables. Ten canteen clips
+and CDED-7 were both tried for the "many tables" look; the honest answer is that table recall needs the trained
+model, so the demo shows what is actually detected.
+
+### Accuracy against CDED-7 annotations
+
+CDED-7 ships `derived_release/derived_status_boxes.csv` (one row per annotated person per frame). That is real
+ground truth for per-table counts:
+
+```bash
+python cv/eval_mae.py --video class_3 --tables cv/tables/cam-library-1.json   --timeline public/cam/library.json --out public/cam/mae-library.json
+# class_3: 534 table-samples, MAE 1.54 people/table (max 4) · total people MAE 3.51
+```
+
+The dashboard shows that number next to the feed (`±1.5 people/table vs CDED-7 annotations`).
+
+### Datasets
+
+`cv/fetch_roboflow.py` pulls Roboflow Universe exports (YOLO11 format), remaps every class onto
+`person / table / chair`, drops the rest, and writes one merged `cv/dataset/data.yaml`:
+
+```bash
+export ROBOFLOW_API_KEY=...
+python cv/fetch_roboflow.py libdetect/reading_room_dataset:1 studycafe/studycafe:1   teste-gxtgx/person-chair:1 object-detection-xxfkw/occupied-chair:1   oscarsurajmasterthesis/chair-bytdf:1 nikhil-ravula/chair-detection---library:1
+```
+
+Check each dataset's licence on its Universe page before publishing a model trained on it. Training stays
+in `cv/train_colab.ipynb` (GPU); this laptop only runs inference.
+
+### Auto table ids
+
+`--auto-zones` takes table boxes from a chosen frame (`--zone-at`). When the bench itself is invisible
+(canteen rows), `--cluster-zones N` clusters seated people into N zones with k-means over feet points and
+labels them left to right, so "table 3 has 5 people" still comes out of the detector, not a hand-drawn box.

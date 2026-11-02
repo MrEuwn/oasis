@@ -1,44 +1,40 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import DemoLogin from '@/components/DemoLogin';
 import { currentUser } from '@/lib/auth.js';
-import { Logo } from '@/components/Icons';
+import RoleCards from '@/components/RoleCards';
 
 export const dynamic = 'force-dynamic';
 
 export default async function LoginPage() {
   const user = await currentUser();
-  if (user) redirect('/radar');
+  if (user) redirect(user.persona === 'admin' ? '/admin' : '/radar');
 
   return (
-    <div className="landing">
-      <div className="wrap" style={{ maxWidth: 520 }}>
-        <header className="topbar-landing">
-          <Link className="brand" href="/">
-            <Logo size={24} />
-            OASIS
-          </Link>
-          <Link className="mono" href="/">← back</Link>
-        </header>
-
-        <div style={{ padding: '48px 0 64px' }}>
-          <p className="eyebrow">Demo access</p>
-          <h1 style={{ fontSize: '2rem', letterSpacing: '-0.03em', lineHeight: 1.1, fontWeight: 600 }}>
-            Enter OASIS
-          </h1>
-          <p className="hint" style={{ marginTop: 10, marginBottom: 24 }}>
-            One tap, no password. Each persona opens a different part of the product.
-          </p>
-
-          <div className="card">
-            <DemoLogin primary chips />
-          </div>
-
-          <p className="hint" style={{ marginTop: 16 }}>
-            This build runs on demo accounts only. Campus Google sign-in stays the production path in the PRD.
-          </p>
+    <div className="l4">
+      <header className="l4-top">
+        <div className="l4-brand">
+          <b>OASIS</b>
+          <span className="mono-label">demo access</span>
         </div>
-      </div>
+        <span className="mono-note l4-top-mid">one tap · no password</span>
+        <a className="l4-live" href="/" style={{ textDecoration: 'none' }}>← landing</a>
+      </header>
+
+      <main className="l4-body" style={{ gridTemplateColumns: 'minmax(0,1fr) 504px' }}>
+        <section className="l4-hero">
+          <p className="mono-label">demo access</p>
+          <h1>Enter OASIS.</h1>
+          <p className="l4-lede">
+            Two roles. Admin opens the detection dashboard, User opens the single table screen.
+            Demo host, guest and navigator stay available underneath for the rest of the PRD.
+          </p>
+          <p className="mono-note l4-fine">
+            Campus Google sign-in stays the production path in the PRD; this build ships demo accounts only.
+          </p>
+        </section>
+        <aside className="l4-roles">
+          <RoleCards />
+        </aside>
+      </main>
     </div>
   );
 }

@@ -63,7 +63,7 @@ Measured on the production build (`npm run build && npm start`), 1 Nov 2026, thi
 | --- | --- |
 | `test:unit` | 20/20 |
 | `test:smoke` | 32/32 |
-| `test:ui` | 43/43, no console errors or hydration warnings |
+| `test:ui` | 35/35 across landing, user (camera line), admin (both replays, zone ids, accuracy line) and 390px mobile |
 | `test:rehearsal` | 20/20 demo logins, 10/10 Navigator bookings, median ~61 ms per two-prompt run (offline parser) |
 | Lighthouse (landing, mobile) | Performance 92 · Accessibility 100 · Best practices 100 |
 
@@ -96,6 +96,33 @@ Known limitation carried over from the PRD: a static table QR can be photographe
 - Every demo screen is labelled simulated data. Nothing seeded is presented as a real campus result.
 - Google sign-in is not in this build: the team decided the demo login is enough for the submission.
 - AI assistance: the application was built with Hermes Agent; the Navigator calls the Gemini API at runtime, and the offline parser is deterministic and labelled in the UI.
+
+
+### Camera preview in the admin dashboard
+
+Two cameras, both replays, switchable in the tile: `library` (quiet study room, table boxes) and `canteen`
+(busy Student Centre, table zones inferred by clustering seated people). Each has a 1:1 h264 loop at 5 fps
+(257 KB and 517 KB, muted) plus a JSON timeline with the same readings keyed by video time, so the table cards
+and the KPI row move with the picture instead of drifting from it.
+
+* Footage: **CDED-7** classroom CCTV (`class_3.mp4`, Zenodo DOI 10.5281/zenodo.21207208) for the Library
+  camera — research/non-commercial licence, so it is demo material only, never redistributed. The canteen
+  camera uses a Pexels clip (`cv/media/cafeteria.mp4`). Video files stay out of git (`cv/media/` ignored).
+* Table ids are assigned automatically by `cv/calibrate.py`: either 40 frames merged into median boxes
+  (real tables), or `--grid-zones rows,cols` when the room is a grid of desks/benches (CDED-7 uses 2×3 desk
+  blocks, the canteen 1×4). Zones, capacity and IDs land in `cv/tables/<camera>.json` as `T01..`. Long canteen
+  benches fall back to a `--grid-zones rows,cols` split of the seated band (k-means clustering exists but
+  its zones overlap, so it is not the default).
+* Accuracy is measured, not asserted: `cv/eval_mae.py` scores the per-table counts against CDED-7's own
+  annotations and the admin tile prints the result (`±1.5 people/table, 534 table-samples`).
+* `cv/count.py` tracks people (ByteTrack), assigns each track to the nearest table **rectangle** within
+  reach (not the centroid — that misfires on wide cells), smooths
+  the count with a 10-sample median and writes `public/cam/<camera>.json` plus an annotated mp4.
+* Training for the person-heavy model runs on Colab/Kaggle: `cv/train_colab.ipynb` (yolo11s, imgsz 960,
+  100 epochs, patience 30) and exports `best.pt` back into `cv/runs/tables/weights/`.
+* The overlay is baked in by `cv/detect.py` (zones from `cv/cameras.json`, model `cv/runs/tables/weights/best.pt`).
+* The tile labels itself **replay**, never "live camera": there is no camera in the room during judging.
+* Rebuild: `python cv/detect.py --source cv/media/cafeteria.mp4 --zone-at 12 --cluster-zones 4 --camera-id cam-canteen-1 --annotate cv/media/canteen-preview.mp4 --dump cv/media/canteen-readings.jsonl` then `node scripts/build-cam.mjs`.
 
 ## Interface
 

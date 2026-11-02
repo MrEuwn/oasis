@@ -1,4 +1,5 @@
 import './globals.css';
+import './v4.css';
 import RegisterSW from '@/components/RegisterSW';
 
 export const metadata = {
@@ -16,7 +17,7 @@ export const metadata = {
 };
 
 export const viewport = {
-  themeColor: '#071a2b',
+  themeColor: '#0f1210',
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
